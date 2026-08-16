@@ -16,11 +16,15 @@ class VideoAnalysisResponse(BaseModel):
     total_scenes: int
     scenes: list[SceneCaption]
 
-
 class InputVideo(BaseModel):
     audio_path : str
     video_path: str
     title: str
     description: str
 
-
+class Items(BaseModel):
+    vector: list[float]
+    video_id: str
+    title: str
+    start_time: float
+    end_time: float
