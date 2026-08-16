@@ -16,6 +16,7 @@ dependencies = [
     "markdown>=3.10.3",
     "opencv-python>=5.0.0.93",
     "pydantic>=2.13.4",
+    "uvicorn>=0.52.3",
 ]
 
 [project.scripts]

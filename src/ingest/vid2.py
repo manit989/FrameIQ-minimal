@@ -1,6 +1,3 @@
-# run these commands before  running this file 
-#uv add opencv-python pydantic
-
 import json
 import os
 import time
@@ -17,20 +14,20 @@ api_key = os.getenv("GOOGLE_API_KEY")
 client = genai.Client(api_key=api_key)
 
 MODEL_ID = "gemini-3.7-flash"
-VIDEO_PATH = "../../data/videos/output.mp4"
-SNAPSHOTS_DIR = "../../data/snapshots"
 
 
-# 1. Define Pydantic Schema for Structured JSON Output
 class SceneCaption(BaseModel):
     timestamp_seconds: float = Field(
-        description="Exact timestamp in seconds where this scene or event occurs"
+        description="Exact timestamp in seconds where this scene occurs"
     )
     timestamp_formatted: str = Field(
-        description="Formatted timecode string, e.g. 00:01:15 or 01:23"
+        description="Formatted timecode string, e.g. 00:01:15"
     )
     description: str = Field(
         description="Detailed caption of what is happening in the scene"
+    )
+    snapshot_url: str | None = Field(
+        default=None, description="HTTP path to snapshot image"
     )
 
 
@@ -38,76 +35,54 @@ class VideoAnalysis(BaseModel):
     scenes: list[SceneCaption]
 
 
-def upload_video(video_file_name):
-    print(f"Uploading {video_file_name}...")
+def upload_video(video_file_name: str):
+    """Handles uploading and polling until Gemini processing completes."""
     video_file = client.files.upload(file=video_file_name)
 
-    # Poll until video processing is completed
     while video_file.state.name != "ACTIVE":
-        print(
-            f"Current state: {video_file.state.name} - Waiting for video to be processed..."
-        )
-        time.sleep(5)
-
-        # Ping the API to refresh the object state
+        time.sleep(3)
         video_file = client.files.get(name=video_file.name)
-
         if video_file.state.name == "FAILED":
-            raise ValueError(
-                f"Video processing failed. Reason: {video_file.error}"
-            )
+            raise RuntimeError(f"Gemini file processing failed: {video_file.error}")
 
-    print(f"Video processing complete: {video_file.uri}")
     return video_file
 
 
-def extract_snapshots(video_path, scenes, output_dir):
-    """Reads local video file using OpenCV and extracts frames at given scene timestamps."""
+def extract_snapshots(video_path: str, scenes: list[SceneCaption], output_dir: str):
+    """Extracts frame snapshots at specified timestamps using OpenCV."""
     os.makedirs(output_dir, exist_ok=True)
-
     cap = cv2.VideoCapture(video_path)
+
     if not cap.isOpened():
-        print(f"Error: Could not open video file at {video_path}")
-        return
+        raise IOError(f"Unable to open video source at '{video_path}'")
 
     fps = cap.get(cv2.CAP_PROP_FPS)
-    print(f"\nExtracting snapshots (Video FPS: {fps:.2f})...")
 
-    for idx, scene in enumerate(scenes):
+    for idx, scene in enumerate(scenes, start=1):
         sec = scene.timestamp_seconds
         frame_number = int(fps * sec)
 
-        # Seek to frame position
         cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
         ret, frame = cap.read()
 
         if ret:
-            snapshot_filename = f"scene_{idx+1}_{int(sec)}s.jpg"
+            snapshot_filename = f"scene_{idx}_{int(sec)}s.jpg"
             snapshot_path = os.path.join(output_dir, snapshot_filename)
             cv2.imwrite(snapshot_path, frame)
-            print(
-                f" Saved: {snapshot_filename} [{scene.timestamp_formatted}]"
-            )
-        else:
-            print(
-                f" Failed to extract frame at {sec}s ({scene.timestamp_formatted})"
-            )
+            scene.snapshot_url = f"/snapshots/{snapshot_filename}"
 
     cap.release()
 
 
-def main():
-    # 1. Upload Video
-    video_file = upload_video(VIDEO_PATH)
+def analyze_and_extract_video(video_path: str, output_dir: str) -> list[SceneCaption]:
+    """Pipeline orchestrator for video analysis and frame extraction."""
+    video_file = upload_video(video_path)
 
     prompt = (
         "Analyze this video scene by scene. For each key event or topic change, "
-        "provide the exact timestamp in seconds, a formatted timecode, and a descriptive caption."
+        "provide exact timestamp in seconds, formatted timecode, and descriptive caption."
     )
 
-    print("\nPrompting Gemini with Structured Output schema...")
-
-    # 2. Call Gemini API using Structured Output JSON
     response = client.models.generate_content(
         model=MODEL_ID,
         contents=[video_file, prompt],
@@ -118,20 +93,7 @@ def main():
         ),
     )
 
-    # 3. Parse JSON Response into Python Data Structure
     analysis_result = VideoAnalysis.model_validate_json(response.text)
+    extract_snapshots(video_path, analysis_result.scenes, output_dir)
 
-    print("\n--- DETECTED SCENES & CAPTIONS ---")
-    for idx, scene in enumerate(analysis_result.scenes, start=1):
-        print(
-            f"{idx}. [{scene.timestamp_formatted}] ({scene.timestamp_seconds}s): {scene.description}"
-        )
-
-    # 4. Extract Local Snapshots using OpenCV
-    extract_snapshots(VIDEO_PATH, analysis_result.scenes, SNAPSHOTS_DIR)
-
-    print(f"\nProcessing complete! All snapshots saved to '{SNAPSHOTS_DIR}'.")
-
-
-if __name__ == "__main__":
-    main()
+    return analysis_result.scenes
