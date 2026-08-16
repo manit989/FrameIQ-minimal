@@ -3,7 +3,7 @@ from faster_whisper import WhisperModel
 model_size = "large-v2"
 
 # Run on GPU with FP16 apne hardware k hisab se ise change kr lena
-model = WhisperModel(model_size, device="cuda", compute_type="float16")
+model = WhisperModel(model_size, device="cpu", compute_type="float16")
 
 segments, info = model.transcribe("../../data/videos/output.mp3", beam_size=5)
 
