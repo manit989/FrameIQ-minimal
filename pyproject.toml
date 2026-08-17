@@ -1,7 +1,7 @@
 [project]
 name = "frameiq"
 version = "0.1.0"
-description = "Add your description here"
+description = "FrameIQ Application"
 readme = "README.md"
 authors = [
     { name = "manit", email = "manit17102006@gmail.com" }
@@ -10,15 +10,20 @@ requires-python = ">=3.11"
 dependencies = [
     "dotenv>=0.9.9",
     "fastapi[standard]>=0.141.1",
-    "faster-whisper>=1.2.1",
     "google-genai>=2.18.1",
     "imageio-ffmpeg>=0.6.0",
     "lancedb>=0.37.1",
     "markdown>=3.10.3",
     "opencv-python>=5.0.0.93",
     "pydantic>=2.13.4",
-    "sentence-transformers>=5.7.0",
     "uvicorn>=0.52.3",
+]
+
+[project.optional-dependencies]
+# Yeh sirf tab download honge agar tum --extra local-ml bologe
+local-ml = [
+    "sentence-transformers>=5.7.0",
+    "faster-whisper>=1.2.1",
 ]
 
 [project.scripts]
