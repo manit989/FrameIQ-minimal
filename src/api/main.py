@@ -42,22 +42,16 @@ def analyze_video(payload: VideoAnalysisRequest):
     audio_path = os.path.join(VIDEOS_DIR, audio_filename)
     title = f"Analysis of {payload.video_filename}"
 
-    try:
-        # 1. Auto-extract Audio
-        extract_audio(video_path, audio_path)
+    extract_audio(video_path, audio_path)
 
-        # 2. Process Video via Gemini & Extract Snapshots
-        scenes, video_db_items = analyze_and_extract_video(video_path, SNAPSHOTS_DIR, video_id, title)
+    audio_db_items = process_audio(audio_path, video_id, title)
+
+    scenes, video_db_items = analyze_and_extract_video(video_path, SNAPSHOTS_DIR, video_id, title)
         
-        # 3. Process Audio via Whisper
-        audio_db_items = process_audio(audio_path, video_id, title)
+    all_db_items = video_db_items + audio_db_items
+    insert_to_lancedb(all_db_items)
 
-        # 4. Insert both into LanceDB Vector Store
-        all_db_items = video_db_items + audio_db_items
-        insert_to_lancedb(all_db_items)
 
-    except Exception as err:
-        raise HTTPException(status_code=500, detail=str(err))
 
     return VideoAnalysisResponse(
         video_filename=payload.video_filename,

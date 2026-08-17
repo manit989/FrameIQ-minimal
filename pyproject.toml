@@ -9,7 +9,7 @@ authors = [
 requires-python = ">=3.11"
 dependencies = [
     "dotenv>=0.9.9",
-    "fastapi>=0.141.1",
+    "fastapi[standard]>=0.141.1",
     "faster-whisper>=1.2.1",
     "google-genai>=2.18.1",
     "imageio-ffmpeg>=0.6.0",
@@ -17,6 +17,7 @@ dependencies = [
     "markdown>=3.10.3",
     "opencv-python>=5.0.0.93",
     "pydantic>=2.13.4",
+    "sentence-transformers>=5.7.0",
     "uvicorn>=0.52.3",
 ]
 
