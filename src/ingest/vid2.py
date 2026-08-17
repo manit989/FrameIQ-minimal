@@ -10,7 +10,7 @@ from src.ingest.embedder import get_embedding
 load_dotenv()
 api_key = os.getenv("GOOGLE_API_KEY")
 client = genai.Client(api_key=api_key)
-MODEL_ID = "gemini-3.5-flash-lite"
+MODEL_ID = "gemini-3.7-flash"
 
 def upload_video(video_file_name: str):
     video_file = client.files.upload(file=video_file_name)
@@ -44,19 +44,49 @@ def analyze_and_extract_video(video_path: str, output_dir: str, video_id: str, t
     video_file = upload_video(video_path)
     prompt = "Analyze this video scene by scene. For each key event or topic change, provide exact timestamp in seconds, formatted timecode, and descriptive caption."
 
+    # Define a clean schema for Gemini (no Optional/union types which break the API)
+    gemini_schema = {
+        "type": "object",
+        "properties": {
+            "scenes": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "timestamp_seconds": {"type": "number"},
+                        "timestamp_formatted": {"type": "string"},
+                        "description": {"type": "string"},
+                    },
+                    "required": ["timestamp_seconds", "timestamp_formatted", "description"],
+                },
+            }
+        },
+        "required": ["scenes"],
+    }
+
     response = client.models.generate_content(
         model=MODEL_ID,
         contents=[video_file, prompt],
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
+            response_schema=gemini_schema,
             temperature=0.2,
         ),
     )
-    
+
     import json
-    # Use json.loads since VideoAnalysisResponse handles the wrapper differently now
-    data = json.loads(response.text)
-    scenes = [SceneCaption(**s) for s in data.get("scenes", [])]
+    raw = response.text
+    data = json.loads(raw)
+
+    # Handle both possible shapes: {"scenes": [...]} or bare [...]
+    if isinstance(data, dict):
+        scene_dicts = data.get("scenes", [])
+    elif isinstance(data, list):
+        scene_dicts = data
+    else:
+        raise ValueError(f"Unexpected Gemini response type: {type(data)}")
+
+    scenes = [SceneCaption(**s) for s in scene_dicts]
     
     extract_snapshots(video_path, scenes, output_dir)
 
