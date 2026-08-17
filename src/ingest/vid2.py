@@ -44,14 +44,25 @@ def analyze_and_extract_video(video_path: str, output_dir: str, video_id: str, t
     video_file = upload_video(video_path)
 
     prompt = (
-        "Analyze this video scene by scene. For each key event or topic change, return:\n"
-        "- start_time (float seconds)\n"
-        "- end_time (float seconds)\n"
-        "- visual_description (describe the environment and actions in detail)\n"
-        "- detected_objects (list of prominent objects visible)\n"
-        "- audio_genre_and_mood (e.g., 'Indie rap, boom-bap beat, aggressive tone', or 'calm acoustic cooking music')\n"
-        "- semantic_intent (summarize the meaning of what is happening or being said, e.g., 'Artist freestyling about street life')\n"
-        "- search_tags (list of 5 high-level abstract keywords a user might search to find this vibe)\n"
+        "You are a video analysis expert. Analyze this video scene by scene.\n"
+        "For each distinct scene (key event, topic change, new person appearing, or shift in activity), extract:\n\n"
+        "- start_time / end_time: precise timestamps in seconds\n"
+        "- visual_description: detailed description of the environment, actions, body language, and framing\n"
+        "- detected_objects: all prominent visible objects (microphone, turntable, laptop, spray can, instrument, etc.)\n"
+        "- recognized_figures: identify ANY famous people, artists, musicians, actors, public figures, YouTubers, or streamers by name. "
+        "If you're not confident, still provide your best guess with context (e.g., 'possibly Eminem based on appearance'). Return empty list only if no one is recognizable.\n"
+        "- activity_type: classify what is happening in concrete terms. Examples: 'freestyle rap', 'music video performance', "
+        "'podcast interview', 'cooking tutorial', 'live concert', 'street busking', 'product review', 'gaming stream', 'vlog'. Be specific, not vague.\n"
+        "- setting: describe WHERE this is taking place. Examples: 'recording studio with sound panels', 'outdoor street corner at night', "
+        "'professional stage with lighting rig', 'home kitchen', 'podcast desk setup'. Be specific.\n"
+        "- visual_cues: list observable indicators that reveal the nature of the content. "
+        "Examples: 'handheld microphone', 'freestyle cipher circle', 'beat playing from speaker', 'graffiti backdrop', "
+        "'ring light', 'dual monitor setup', 'chef knife and cutting board'. These are the clues a human would use to instantly recognize what's happening.\n"
+        "- audio_genre_and_mood: describe the audio landscape. Examples: 'boom-bap beat, aggressive freestyle delivery', "
+        "'lo-fi hip-hop instrumental, chill vibe', 'no music, conversational podcast tone', 'heavy metal, mosh pit energy'\n"
+        "- semantic_intent: what is the PURPOSE or meaning of this scene? Examples: 'Artist freestyling over a boom-bap beat about street life', "
+        "'Host interviewing guest about their new album', 'Chef demonstrating knife technique for beginners'\n"
+        "- search_tags: 5 high-level keywords a user would search to find this type of content\n"
     )
 
     # Define a clean schema for Gemini (no Optional/union types which break the API)
@@ -70,6 +81,16 @@ def analyze_and_extract_video(video_path: str, output_dir: str, video_id: str, t
                             "type": "array",
                             "items": {"type": "string"},
                         },
+                        "recognized_figures": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                        "activity_type": {"type": "string"},
+                        "setting": {"type": "string"},
+                        "visual_cues": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
                         "audio_genre_and_mood": {"type": "string"},
                         "semantic_intent": {"type": "string"},
                         "search_tags": {
@@ -79,7 +100,8 @@ def analyze_and_extract_video(video_path: str, output_dir: str, video_id: str, t
                     },
                     "required": [
                         "start_time", "end_time", "visual_description",
-                        "detected_objects", "audio_genre_and_mood",
+                        "detected_objects", "recognized_figures", "activity_type",
+                        "setting", "visual_cues", "audio_genre_and_mood",
                         "semantic_intent", "search_tags",
                     ],
                 },
@@ -117,9 +139,15 @@ def analyze_and_extract_video(video_path: str, output_dir: str, video_id: str, t
     # Build rich text for embedding from all the scene metadata
     video_items = []
     for scene in scenes:
+        print(scene)
+        figures_str = ', '.join(scene.recognized_figures) if scene.recognized_figures else 'none'
         scene_text = (
             f"[SCENE] {scene.visual_description} | "
+            f"Activity: {scene.activity_type} | "
+            f"Setting: {scene.setting} | "
+            f"Figures: {figures_str} | "
             f"Objects: {', '.join(scene.detected_objects)} | "
+            f"Cues: {', '.join(scene.visual_cues)} | "
             f"Audio: {scene.audio_genre_and_mood} | "
             f"Intent: {scene.semantic_intent} | "
             f"Tags: {', '.join(scene.search_tags)}"
