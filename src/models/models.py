@@ -6,21 +6,14 @@ class SceneCaption(BaseModel):
     description: str = Field(description="Scene description from Gemini")
     snapshot_url: str | None = Field(default=None, description="Static HTTP URL to snapshot image")
 
-
 class VideoAnalysisRequest(BaseModel):
+    # Only ask for the video; the system handles the rest
     video_filename: str = Field(default="output.mp4")
-
 
 class VideoAnalysisResponse(BaseModel):
     video_filename: str
     total_scenes: int
     scenes: list[SceneCaption]
-
-class InputVideo(BaseModel):
-    audio_path : str
-    video_path: str
-    title: str
-    description: str
 
 class Items(BaseModel):
     vector: list[float]
@@ -28,3 +21,4 @@ class Items(BaseModel):
     title: str
     start_time: float
     end_time: float
+    text: str = ""
