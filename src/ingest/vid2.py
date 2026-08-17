@@ -10,7 +10,7 @@ from src.ingest.embedder import get_embedding
 load_dotenv()
 api_key = os.getenv("GOOGLE_API_KEY")
 client = genai.Client(api_key=api_key)
-MODEL_ID = "gemini-3.7-flash"
+MODEL_ID = "gemini-3.5-flash-lite"
 
 def upload_video(video_file_name: str):
     video_file = client.files.upload(file=video_file_name)
