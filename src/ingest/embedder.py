@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+from google.genai import types
 from google import genai
 from scripts.getBackend import get_optimal_backend
 
@@ -31,7 +32,10 @@ def get_embedding(text: str) -> list[float]:
   else:
     # CPU-only machine (Person 2) ke liye hosted API
     response = client.models.embed_content(
-        model="text-embedding-004",
+        model="gemini-embedding-001", # Changed to the stable production endpoint
         contents=text,
+        config=types.EmbedContentConfig(
+            task_type="RETRIEVAL_DOCUMENT"
+        )
     )
-    return response.embedding.values
+    return response.embeddings[0].values
