@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multimodal Video Processing & Retrieval Engine</title>
+    <style>
+        :root {
+            --bg: #000000;
+            --card-bg: rgba(18, 18, 26, 0.7);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --accent-cyan: #00f0ff;
+            --accent-purple: #a855f7;
+            --accent-green: #10b981;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 50% 0%, rgba(168, 85, 247, 0.15), transparent 40%),
+                radial-gradient(circle at 20% 80%, rgba(0, 240, 255, 0.1), transparent 30%);
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+            z-index: 10;
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #fff 0%, var(--accent-cyan) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        p.subtitle {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        /* Simulation Controls */
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2.5rem;
+            z-index: 10;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--card-border);
+            color: var(--text-main);
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(168, 85, 247, 0.2));
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 0 25px rgba(0, 240, 255, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Flow Canvas Architecture */
+        .architecture-container {
+            position: relative;
+            width: 100%;
+            max-width: 1100px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2.5rem;
+            margin-bottom: 3rem;
+        }
+
+        .grid-row {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 3rem;
+            width: 100%;
+            z-index: 2;
+        }
+
+        /* Node Cards */
+        .node {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 14px;
+            padding: 1.25rem;
+            width: 240px;
+            backdrop-filter: blur(12px);
+            position: relative;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        .node-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .node-icon {
+            font-size: 1.4rem;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 0.4rem;
+            border-radius: 8px;
+        }
+
+        .node-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .node-desc {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            line-height: 1.3;
+        }
+
+        .node-tag {
+            display: inline-block;
+            font-size: 0.65rem;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--accent-cyan);
+            margin-top: 0.5rem;
+            font-family: monospace;
+        }
+
+        /* Active & Completed Node States */
+        .node.active {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 30px rgba(0, 240, 255, 0.4);
+            transform: scale(1.03);
+        }
+
+        .node.completed {
+            border-color: var(--accent-green);
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.2);
+        }
+
+        .node.completed .node-title {
+            color: var(--accent-green);
+        }
+
+        /* Split Circular Node */
+        .node-split {
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 0;
+        }
+
+        /* SVG Overlay Lines */
+        .svg-connections {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .connection-line {
+            stroke: rgba(255, 255, 255, 0.15);
+            stroke-width: 2;
+            fill: none;
+        }
+
+        .pulse-line {
+            stroke: var(--accent-cyan);
+            stroke-width: 3;
+            fill: none;
+            stroke-dasharray: 10 15;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .pulse-active {
+            opacity: 1;
+            animation: dash 1s linear infinite;
+        }
+
+        @keyframes dash {
+            to { stroke-dashoffset: -25; }
+        }
+
+        /* Console Log Window */
+        .console-container {
+            width: 100%;
+            max-width: 1100px;
+            background: #05050a;
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 1rem;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.85rem;
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8);
+        }
+
+        .console-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-muted);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        .dot-red { background: #ef4444; }
+        .dot-yellow { background: #f59e0b; }
+        .dot-green { background: #10b981; }
+
+        .console-body {
+            height: 110px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .log-entry {
+            color: #d1d5db;
+        }
+        .log-time { color: var(--text-muted); }
+        .log-success { color: var(--accent-green); }
+        .log-info { color: var(--accent-cyan); }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Backend Execution Visualizer</h1>
+        <p class="subtitle">Live Multimodal Video Ingestion & Vector Retrieval Pipeline</p>
+    </header>
+
+    <div class="controls">
+        <button class="btn btn-primary" onclick="startPipelineSimulation()">
+            <span id="play-icon">▶</span> Run Pipeline Simulation
+        </button>
+        <button class="btn btn-secondary" onclick="resetPipeline()">Reset</button>
+    </div>
+
+    <div class="architecture-container" id="arch-container">
+        <!-- SVG Connections Layer -->
+        <svg class="svg-connections" id="svg-layer">
+            <path id="line1" class="connection-line" />
+            <path id="line1-pulse" class="pulse-line" />
+
+            <path id="line2a" class="connection-line" />
+            <path id="line2a-pulse" class="pulse-line" />
+
+            <path id="line2b" class="connection-line" />
+            <path id="line2b-pulse" class="pulse-line" />
+
+            <path id="line3a" class="connection-line" />
+            <path id="line3a-pulse" class="pulse-line" />
+
+            <path id="line3b" class="connection-line" />
+            <path id="line3b-pulse" class="pulse-line" />
+
+            <path id="line4" class="connection-line" />
+            <path id="line4-pulse" class="pulse-line" />
+
+            <path id="line5" class="connection-line" />
+            <path id="line5-pulse" class="pulse-line" />
+        </svg>
+
+        <!-- Stage 1: Upload -->
+        <div class="grid-row">
+            <div class="node" id="node-upload">
+                <div class="node-header">
+                    <span class="node-icon">📹</span>
+                    <span class="node-title">User Video Upload</span>
+                </div>
+                <div class="node-desc">Receives raw video payload from frontend client</div>
+                <span class="node-tag">POST /api/upload</span>
+            </div>
+        </div>
+
+        <!-- Stage 2: Stream Splitter -->
+        <div class="grid-row">
+            <div class="node node-split" id="node-split">
+                <span class="node-icon">🔀</span>
+                <span class="node-title" style="font-size: 0.8rem;">SPLIT</span>
+            </div>
+        </div>
+
+        <!-- Stage 3: Parallel Processing Branches -->
+        <div class="grid-row">
+            <!-- Branch A: Audio -->
+            <div class="node" id="node-audio">
+                <div class="node-header">
+                    <span class="node-icon">🎙️</span>
+                    <span class="node-title">Audio Transcription</span>
+                </div>
+                <div class="node-desc">Speech-to-text extraction via Whisper / Groq</div>
+                <span class="node-tag">Whisper / Groq API</span>
+            </div>
+
+            <!-- Branch B: Video Frames -->
+            <div class="node" id="node-video">
+                <div class="node-header">
+                    <span class="node-icon">🎞️</span>
+                    <span class="node-title">Video Transcription</span>
+                </div>
+                <div class="node-desc">Visual frame extraction & contextual description</div>
+                <span class="node-tag">Frame Sampler</span>
+            </div>
+        </div>
+
+        <!-- Stage 4: Multimodal Embedding Generation -->
+        <div class="grid-row">
+            <div class="node" id="node-embedding">
+                <div class="node-header">
+                    <span class="node-icon">🧠</span>
+                    <span class="node-title">Embedding Generation</span>
+                </div>
+                <div class="node-desc">Maps multimodal transcriptions into dense vector representations</div>
+                <span class="node-tag">Vector Fusion</span>
+            </div>
+        </div>
+
+        <!-- Stage 5: Vector DB Storage -->
+        <div class="grid-row">
+            <div class="node" id="node-lancedb">
+                <div class="node-header">
+                    <span class="node-icon">🗄️</span>
+                    <span class="node-title">LanceDB Storage</span>
+                </div>
+                <div class="node-desc">Stores vector indices locally for lightning-fast retrieval</div>
+                <span class="node-tag">/lancedbstorage</span>
+            </div>
+        </div>
+
+        <!-- Stage 6: Similarity Search & Output -->
+        <div class="grid-row">
+            <div class="node" id="node-output">
+                <div class="node-header">
+                    <span class="node-icon">🎯</span>
+                    <span class="node-title">Data Query & Match</span>
+                </div>
+                <div class="node-desc">Calculates similarity score & fetches exact timestamp video match</div>
+                <span class="node-tag">Cosine Similarity</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Live Telemetry Console -->
+    <div class="console-container">
+        <div class="console-header">
+            <span class="dot dot-red"></span>
+            <span class="dot dot-yellow"></span>
+            <span class="dot dot-green"></span>
+            <span style="margin-left: 0.5rem;">Backend Telemetry Console</span>
+        </div>
+        <div class="console-body" id="console-logs">
+            <div class="log-entry"><span class="log-time">[00:00:00]</span> Engine initialized. Awaiting pipeline execution...</div>
+        </div>
+    </div>
+
+    <script>
+        // Sleep helper
+        const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+        // SVG Line Drawing Logic
+        function connectNodes(nodeAId, nodeBId, lineId, pulseId) {
+            const nodeA = document.getElementById(nodeAId).getBoundingClientRect();
+            const nodeB = document.getElementById(nodeBId).getBoundingClientRect();
+            const container = document.getElementById('arch-container').getBoundingClientRect();
+
+            const x1 = nodeA.left + nodeA.width / 2 - container.left;
+            const y1 = nodeA.bottom - container.top;
+            const x2 = nodeB.left + nodeB.width / 2 - container.left;
+            const y2 = nodeB.top - container.top;
+
+            // Curved cubic bezier path
+            const d = `M ${x1} ${y1} C ${x1} ${y1 + (y2 - y1) / 2}, ${x2} ${y1 + (y2 - y1) / 2}, ${x2} ${y2}`;
+
+            document.getElementById(lineId).setAttribute('d', d);
+            document.getElementById(pulseId).setAttribute('d', d);
+        }
+
+        function updateAllLines() {
+            connectNodes('node-upload', 'node-split', 'line1', 'line1-pulse');
+            connectNodes('node-split', 'node-audio', 'line2a', 'line2a-pulse');
+            connectNodes('node-split', 'node-video', 'line2b', 'line2b-pulse');
+            connectNodes('node-audio', 'node-embedding', 'line3a', 'line3a-pulse');
+            connectNodes('node-video', 'node-embedding', 'line3b', 'line3b-pulse');
+            connectNodes('node-embedding', 'node-lancedb', 'line4', 'line4-pulse');
+            connectNodes('node-lancedb', 'node-output', 'line5', 'line5-pulse');
+        }
+
+        window.addEventListener('resize', updateAllLines);
+        window.addEventListener('load', updateAllLines);
+
+        // Logging function
+        function log(msg, type = '') {
+            const logs = document.getElementById('console-logs');
+            const time = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            
+            let classType = '';
+            if (type === 'info') classType = 'log-info';
+            if (type === 'success') classType = 'log-success';
+
+            entry.innerHTML = `<span class="log-time">[${time}]</span> <span class="${classType}">${msg}</span>`;
+            logs.appendChild(entry);
+            logs.scrollTop = logs.scrollHeight;
+        }
+
+        // Animation Workflow Simulation
+        let isRunning = false;
+
+        async function startPipelineSimulation() {
+            if (isRunning) return;
+            isRunning = true;
+            resetPipeline();
+
+            log('Initiating video ingestion pipeline simulation...', 'info');
+
+            // Step 1: Upload
+            await activateStage('node-upload', 'line1-pulse', 'Extracting raw video file stream...', 1200);
+
+            // Step 2: Split
+            await activateStage('node-split', ['line2a-pulse', 'line2b-pulse'], 'Splitting stream into parallel audio and video processing pipelines...', 1000);
+
+            // Step 3: Parallel Audio & Video Processing
+            document.getElementById('node-audio').classList.add('active');
+            document.getElementById('node-video').classList.add('active');
+            log('Executing parallel audio transcription via Whisper/Groq & frame extraction...', 'info');
+            await sleep(2000);
+
+            document.getElementById('node-audio').classList.remove('active');
+            document.getElementById('node-audio').classList.add('completed');
+            document.getElementById('node-video').classList.remove('active');
+            document.getElementById('node-video').classList.add('completed');
+
+            // Trigger pulses to embedding stage
+            document.getElementById('line3a-pulse').classList.add('pulse-active');
+            document.getElementById('line3b-pulse').classList.add('pulse-active');
+            await sleep(800);
+
+            // Step 4: Embedding Generation
+            document.getElementById('line3a-pulse').classList.remove('pulse-active');
+            document.getElementById('line3b-pulse').classList.remove('pulse-active');
+            await activateStage('node-embedding', 'line4-pulse', 'Fusing multimodal text into dense 1536-dim vector embeddings...', 1600);
+
+            // Step 5: LanceDB Storage
+            await activateStage('node-lancedb', 'line5-pulse', 'Writing vectors to local LanceDB index at /lancedbstorage...', 1200);
+
+            // Step 6: Similarity Output
+            document.getElementById('node-output').classList.add('active');
+            log('Executing cosine similarity GET request across vector space...', 'info');
+            await sleep(1500);
+            document.getElementById('node-output').classList.remove('active');
+            document.getElementById('node-output').classList.add('completed');
+
+            log('✨ Similarity score calculated! Relevant video match & exact timestamp returned to client.', 'success');
+            isRunning = false;
+        }
+
+        async function activateStage(nodeId, pulseLineId, logMessage, duration) {
+            const node = document.getElementById(nodeId);
+            node.classList.add('active');
+            log(logMessage);
+
+            await sleep(duration);
+
+            node.classList.remove('active');
+            node.classList.add('completed');
+
+            if (Array.isArray(pulseLineId)) {
+                pulseLineId.forEach(id => document.getElementById(id).classList.add('pulse-active'));
+            } else if (pulseLineId) {
+                document.getElementById(pulseLineId).classList.add('pulse-active');
+            }
+
+            await sleep(600);
+
+            if (Array.isArray(pulseLineId)) {
+                pulseLineId.forEach(id => document.getElementById(id).classList.remove('pulse-active'));
+            } else if (pulseLineId) {
+                document.getElementById(pulseLineId).classList.remove('pulse-active');
+            }
+        }
+
+        function resetPipeline() {
+            document.querySelectorAll('.node').forEach(node => {
+                node.classList.remove('active', 'completed');
+            });
+            document.querySelectorAll('.pulse-line').forEach(line => {
+                line.classList.remove('pulse-active');
+            });
+            document.getElementById('console-logs').innerHTML = '<div class="log-entry"><span class="log-time">[00:00:00]</span> Pipeline state reset. Ready for run.</div>';
+            isRunning = false;
+        }
+    </script>
+</body>
+</html>
