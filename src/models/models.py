@@ -1,6 +1,5 @@
 from pydantic import BaseModel, Field
 
-
 class SceneCaption(BaseModel):
     start_time: float = Field(description="Scene start time in seconds")
     end_time: float = Field(description="Scene end time in seconds")
@@ -15,6 +14,19 @@ class SceneCaption(BaseModel):
     search_tags: list[str] = Field(description="5 high-level abstract keywords a user might search")
     snapshot_url: str | None = Field(default=None, description="Static HTTP URL to snapshot image")
 
+class SearchResultItem(BaseModel):
+    video_id: str
+    title: str
+    start_time: float
+    end_time: float
+    text: str
+    thumbnail_url: str
+    similarity_score: float
+
+class SearchResponse(BaseModel):
+    query: str
+    count: int
+    results: list[SearchResultItem]
 
 class VideoAnalysisRequest(BaseModel):
     # Only ask for the video; the system handles the rest
