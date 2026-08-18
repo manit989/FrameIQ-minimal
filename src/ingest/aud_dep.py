@@ -1,11 +1,8 @@
 import os
 import subprocess
-from groq import Groq
+from faster_whisper import WhisperModel
 from src.models.models import Items
 from src.ingest.embedder import get_embedding
-
-
-client = Groq()
 
 def extract_audio(video_path: str, audio_path: str):
     """Dynamically extracts audio from the video file using FFmpeg."""
@@ -27,27 +24,23 @@ def extract_audio(video_path: str, audio_path: str):
         raise RuntimeError(f"FFMPEG failed to extract audio: {e}")
 
 def process_audio(audio_path: str, video_id: str, title: str) -> list[Items]:
-    with open(audio_path, "rb") as file:
-        transcription = client.audio.transcriptions.create(
-          file=(audio_path, file.read()),
-          model="whisper-large-v3-turbo",
-          temperature=0,
-          response_format="verbose_json",
-        )
+    model_size = "large-v2"
+    model = WhisperModel(model_size, device="cpu", compute_type="int8")
+
+    segments, info = model.transcribe(audio_path, beam_size=5)
+    print("Detected language '%s' with probability %f" % (info.language, info.language_probability))
 
     audio_items = []
-    for segment in transcription.segments: # type: ignore
-        clean_text = f"[AUDIO] {segment['text']}"
+    for segment in segments:
+        clean_text = f"[AUDIO] {segment.text}"
         vector = get_embedding(clean_text)
-
-        print(segment)
         
         item = Items(
             vector=vector,
             video_id=video_id,
             title=title,
-            start_time=segment['start'],
-            end_time=segment['end'],
+            start_time=segment.start,
+            end_time=segment.end,
             text=clean_text
         )
         audio_items.append(item)
