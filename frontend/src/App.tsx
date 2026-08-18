@@ -17,24 +17,26 @@ export default function App() {
       </div>
 
       <div className="flex flex-1">
-        {/* Sidebar remains untouched */}
+        {/* Sidebar */}
         <Sidebar />
 
         {/* Main Feed Container */}
-        <main className="flex-1 px-4 md:px-6 py-2 overflow-x-hidden">
+        <main className="flex-1 px-3 sm:px-6 py-2 overflow-x-hidden">
           
-          {/* Expanded AI Search Workspace (Pushes content down cleanly) */}
+          {/* Expanded AI Search Workspace */}
           <AiSearchWorkspace
             isOpen={isAiSearchOpen}
             onClose={() => setIsAiSearchOpen(false)}
           />
 
+          {/* Category Filter Pills */}
           <CategoryPills
             selectedCategory={selectedCategory}
             onSelectCategory={setSelectedCategory}
           />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-x-4 gap-y-8 mt-4">
+          {/* Clean 4-Column Max Reel Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1.5 sm:gap-2 mt-3">
             {Array.from({ length: 12 }).map((_, index) => (
               <VideoCard key={index} />
             ))}
