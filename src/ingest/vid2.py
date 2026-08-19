@@ -21,7 +21,7 @@ def upload_video(video_file_name: str):
             raise RuntimeError(f"Gemini file processing failed: {video_file.error}")
     return video_file
 
-def extract_snapshots(video_path: str, scenes: list[SceneCaption], output_dir: str):
+def extract_snapshots(video_path: str, scenes: list[SceneCaption], output_dir: str, video_id: str):
     os.makedirs(output_dir, exist_ok=True)
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -34,7 +34,7 @@ def extract_snapshots(video_path: str, scenes: list[SceneCaption], output_dir: s
         cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
         ret, frame = cap.read()
         if ret:
-            snapshot_filename = f"scene_{idx}_{int(scene.start_time)}s.jpg"
+            snapshot_filename = f"{video_id}_{int(scene.start_time)}s.jpg"
             snapshot_path = os.path.join(output_dir, snapshot_filename)
             cv2.imwrite(snapshot_path, frame)
             scene.snapshot_url = f"/snapshots/{snapshot_filename}"
@@ -134,7 +134,7 @@ def analyze_and_extract_video(video_path: str, output_dir: str, video_id: str, t
 
     scenes = [SceneCaption(**s) for s in scene_dicts]
     
-    extract_snapshots(video_path, scenes, output_dir)
+    extract_snapshots(video_path, scenes, output_dir, video_id)
 
     # Build rich text for embedding from all the scene metadata
     video_items = []

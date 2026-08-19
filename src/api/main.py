@@ -19,6 +19,7 @@ os.makedirs(VIDEOS_DIR, exist_ok=True)
 os.makedirs(SNAPSHOTS_DIR, exist_ok=True)
 
 app.mount("/snapshots", StaticFiles(directory=SNAPSHOTS_DIR), name="snapshots")
+app.mount("/videos", StaticFiles(directory=VIDEOS_DIR), name="videos")
 
 app.add_middleware(
     CORSMiddleware,
@@ -46,7 +47,7 @@ def get_videos(query: str, limit: int = 10):
             start_time=row["start_time"],
             end_time=row["end_time"],
             text=row.get("text", ""),
-            thumbnail_url=f"/snapshots/{row['video_id']}_{row['start_time']:.1f}.jpg",
+            thumbnail_url=f"/snapshots/{row['video_id']}_{int(row['start_time'])}s.jpg",
             similarity_score=1 - row.get("_distance", 0),
         ))
 

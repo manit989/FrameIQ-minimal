@@ -2,12 +2,17 @@ import { useState, useRef, useEffect, type FormEvent } from "react"
 import { Search, Mic, Sparkles, X, ArrowUp, Loader2 } from "lucide-react"
 import { PerimeterLoader } from "../../search/PerimeterLoader"
 
-export function NavSearch() {
+interface NavSearchProps {
+  onSearch: (query: string) => void
+}
+
+export function NavSearch({ onSearch }: NavSearchProps) {
   const [isAiMode, setIsAiMode] = useState(false)
   const [query, setQuery] = useState("")
   const [isSearching, setIsSearching] = useState(false)
   const [animating, setAnimating] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const standardInputRef = useRef<HTMLInputElement>(null)
 
   // Trigger perimeter loading animation on mode transform
   useEffect(() => {
@@ -20,7 +25,7 @@ export function NavSearch() {
   }, [isAiMode])
 
   const handleOpenAi = () => setIsAiMode(true)
-  
+
   const handleCloseAi = () => {
     setIsAiMode(false)
     setQuery("")
@@ -29,28 +34,49 @@ export function NavSearch() {
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
-    if (!query.trim() || isSearching) return
-    setIsSearching(true)
+    const searchQuery = isAiMode ? query : (standardInputRef.current?.value || "")
+    if (!searchQuery.trim() || isSearching) return
 
-    // Simulated search delay
+    setIsSearching(true)
+    onSearch(searchQuery.trim())
+
+    // Reset searching state after a brief delay (actual loading is handled by parent)
     setTimeout(() => {
       setIsSearching(false)
-    }, 1500)
+    }, 500)
+  }
+
+  const handleStandardSubmit = (e: FormEvent) => {
+    e.preventDefault()
+    const searchQuery = standardInputRef.current?.value || ""
+    if (!searchQuery.trim()) return
+    onSearch(searchQuery.trim())
   }
 
   return (
     <div className="flex flex-1 items-center justify-center px-2 md:px-8 max-w-[800px]">
-      
+
       {!isAiMode ? (
         /* Standard Search Bar */
-        <div className="flex w-full items-center h-10 transition-all duration-300">
+        <form onSubmit={handleStandardSubmit} className="flex w-full items-center h-10 transition-all duration-300">
           <div className="flex h-full flex-1 items-center rounded-l-full border border-r-0 border-border bg-input px-4 shadow-inner focus-within:border-primary">
+            <Search className="h-4 w-4 text-muted-foreground mr-2 shrink-0" />
             <input
+              ref={standardInputRef}
               type="text"
-              placeholder="Search"
+              placeholder="Search videos, scenes, objects…"
               className="w-full bg-transparent text-sm md:text-base outline-none text-foreground placeholder:text-muted-foreground"
             />
           </div>
+
+          {/* Submit button for standard search */}
+          <button
+            type="submit"
+            aria-label="Search"
+            className="flex h-full w-14 shrink-0 items-center justify-center border-y border-border bg-muted hover:bg-accent transition-colors"
+          >
+            <Search className="h-4 w-4 text-foreground" />
+          </button>
 
           {/* Sparkle Transform Trigger Button */}
           <button
@@ -70,9 +96,9 @@ export function NavSearch() {
           >
             <Mic className="h-5 w-5 text-foreground" />
           </button>
-        </div>
+        </form>
       ) : (
-        /* Transformed Google AI Search Bar */
+        /* Transformed AI Search Bar */
         <form
           onSubmit={handleSubmit}
           className="relative flex w-full items-center min-h-[52px] rounded-2xl border border-white/10 bg-card/90 shadow-2xl backdrop-blur-xl px-4 py-2 transition-all duration-300 animate-in fade-in zoom-in-95"
@@ -88,14 +114,14 @@ export function NavSearch() {
           {/* AI Input Area */}
           <div className="flex flex-col flex-1 min-w-0 pr-2">
             <span className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground/80">
-              Welcome • FrameIQ AI
+              FrameIQ AI • Semantic Search
             </span>
             <input
               ref={inputRef}
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Ask AI or describe a scene to search..."
+              placeholder="Describe a scene — 'person cooking pasta in a modern kitchen'…"
               className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 outline-none"
             />
           </div>

@@ -1,19 +1,28 @@
 import { Menu } from "lucide-react"
 import { Button } from "../../ui/button"
 
-export function NavLeft() {
+interface NavLeftProps {
+  onToggleSidebar: () => void
+  onNavigateHome: () => void
+}
+
+export function NavLeft({ onToggleSidebar, onNavigateHome }: NavLeftProps) {
   return (
-    <div className="flex items-center gap-4">
-      <Button 
-        variant="ghost" 
-        size="icon" 
-        className="h-10 w-10 rounded-full hover:bg-accent text-foreground transition-colors"
+    <div className="flex items-center gap-3 shrink-0">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onToggleSidebar}
+        className="h-9 w-9 rounded-full hover:bg-accent text-foreground transition-colors"
       >
-        <Menu className="h-6 w-6" />
+        <Menu className="h-5 w-5" />
       </Button>
-      <div className="text-2xl font-bold tracking-tight">
-        Frame<span className="text-red-600 dark:text-red-500">IQ</span>
-      </div>
+      <button
+        onClick={onNavigateHome}
+        className="text-xl font-bold tracking-tight select-none hover:opacity-80 transition-opacity"
+      >
+        Frame<span className="text-red-500">IQ</span>
+      </button>
     </div>
   )
 }
