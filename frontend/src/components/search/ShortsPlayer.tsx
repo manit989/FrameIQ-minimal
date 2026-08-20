@@ -19,6 +19,8 @@ interface ShortsPlayerProps {
   onClose: () => void
 }
 
+const API_BASE_URL = "http://localhost:8000"
+
 export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) {
   const [currentIndex, setCurrentIndex] = useState(startIndex)
   const [isPlaying, setIsPlaying] = useState(true)
@@ -80,11 +82,14 @@ export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) 
     const video = videoRef.current
     if (!video) return
 
+    const curItem = items[currentIndex]
+    const ext = (curItem as unknown as { extension?: string }).extension || "webm"
+
     video.pause()
-    video.src = `/videos/${items[currentIndex].video_id}.mp4`
+    // Bypass Vite proxy directly to FastAPI & match uploaded format extension
+    video.src = `${API_BASE_URL}/videos/${curItem.video_id}.${ext}`
     video.load()
 
-    const curItem = items[currentIndex]
     const curDuration = curItem.end_time - curItem.start_time
 
     const handleCanPlay = () => {
@@ -250,7 +255,7 @@ export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) 
           >
             {items.map((clipItem, idx) => (
               <div
-                key={`${clipItem.video_id}-${clipItem.start_time}`}
+                key={`${clipItem.video_id}-${clipItem.start_time}-${idx}`}
                 className="h-full w-full snap-start snap-always shrink-0 relative"
               >
                 {/* Only the active clip gets the real video */}
