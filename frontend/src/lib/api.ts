@@ -103,3 +103,28 @@ export async function searchVideos(
 
   return res.json()
 }
+
+// --- Home feed ---
+
+export interface VideoItem {
+  video_id: string
+  video_filename: string
+  title: string
+  thumbnail_url: string
+  scene_count: number
+  duration: string
+}
+
+/**
+ * GET /api/videos — List all analyzed videos
+ */
+export async function fetchVideos(): Promise<VideoItem[]> {
+  const res = await fetch(`${API_BASE}/api/videos`)
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch videos (${res.status})`)
+  }
+
+  const data = await res.json()
+  return data.videos ?? []
+}

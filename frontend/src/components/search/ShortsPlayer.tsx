@@ -9,6 +9,8 @@ import {
   MessageCircle,
   Clock,
   Sparkles,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react"
 import type { SearchResultItem } from "../../lib/api"
 import { cleanSceneText } from "../../lib/utils"
@@ -19,20 +21,27 @@ interface ShortsPlayerProps {
   onClose: () => void
 }
 
-const API_BASE_URL = "http://localhost:8000"
-
 export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) {
   const [currentIndex, setCurrentIndex] = useState(startIndex)
   const [isPlaying, setIsPlaying] = useState(true)
   const [isMuted, setIsMuted] = useState(false)
   const [progress, setProgress] = useState(0)
   const [liked, setLiked] = useState(false)
+
   const videoRef = useRef<HTMLVideoElement>(null)
+  const videoContainerRef = useRef<HTMLDivElement>(null)
   const timeCheckRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const backdropRef = useRef<HTMLDivElement>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const isScrollingRef = useRef(false)
-  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const playerRef = useRef<HTMLDivElement>(null)
+  const isAnimatingRef = useRef(false)
+  const touchStartYRef = useRef<number | null>(null)
+  // Ref mirror of currentIndex for use inside event handlers to avoid stale closures
+  const currentIndexRef = useRef(startIndex)
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    currentIndexRef.current = currentIndex
+  }, [currentIndex])
 
   const item = items[currentIndex]
   const similarityPercent = Math.round(item.similarity_score * 100)
@@ -48,46 +57,70 @@ export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) 
   const togglePlay = useCallback(() => {
     const video = videoRef.current
     if (!video) return
-    if (isPlaying) {
+    if (video.paused) {
+      video.play().then(() => setIsPlaying(true)).catch(() => {})
+    } else {
       video.pause()
       setIsPlaying(false)
-    } else {
-      video.play().then(() => setIsPlaying(true)).catch(() => {})
     }
-  }, [isPlaying])
+  }, [])
 
-  // Navigate between clips
+  // ── Navigate between clips with smooth imperative animation ──
   const goToClip = useCallback((newIndex: number) => {
     if (newIndex < 0 || newIndex >= items.length) return
-    setCurrentIndex(newIndex)
-    setProgress(0)
-    setLiked(false)
+    if (isAnimatingRef.current) return
 
-    // Scroll the snap container to the correct position
-    const scrollEl = scrollRef.current
-    if (scrollEl) {
-      isScrollingRef.current = true
-      const targetY = newIndex * scrollEl.clientHeight
-      scrollEl.scrollTo({ top: targetY, behavior: "smooth" })
-      // Reset scroll lock after animation
-      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current)
-      scrollTimeoutRef.current = setTimeout(() => {
-        isScrollingRef.current = false
-      }, 600)
+    isAnimatingRef.current = true
+    const direction = newIndex > currentIndexRef.current ? 1 : -1
+    const container = videoContainerRef.current
+    if (!container) {
+      isAnimatingRef.current = false
+      return
     }
+
+    // Phase 1 — Slide the current clip out
+    container.style.transition =
+      "transform 0.18s ease-in, opacity 0.15s ease-in"
+    container.style.transform = `translateY(${-direction * 70}px) scale(0.97)`
+    container.style.opacity = "0"
+
+    setTimeout(() => {
+      // Phase 2 — Jump instantly to the entrance position (no transition)
+      container.style.transition = "none"
+      container.style.transform = `translateY(${direction * 70}px) scale(0.97)`
+      // opacity stays 0 so the loading frame isn't visible
+
+      // Update React state → triggers the useEffect that loads the new video
+      setCurrentIndex(newIndex)
+      setProgress(0)
+      setLiked(false)
+
+      // Phase 3 — Slide in (double-rAF ensures the browser committed the jump)
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          container.style.transition =
+            "transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease-out"
+          container.style.transform = "translateY(0) scale(1)"
+          container.style.opacity = "1"
+
+          setTimeout(() => {
+            isAnimatingRef.current = false
+          }, 300)
+        })
+      })
+    }, 180) // matches Phase 1 duration
   }, [items.length])
 
-  // Start playing when clip changes
+  // ── Load & play video when clip changes ──
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
 
     const curItem = items[currentIndex]
-    const ext = (curItem as unknown as { extension?: string }).extension || "webm"
+    const filename = curItem.video_filename || `${curItem.video_id}.mp4`
 
     video.pause()
-    // Bypass Vite proxy directly to FastAPI & match uploaded format extension
-    video.src = `${API_BASE_URL}/videos/${curItem.video_id}.${ext}`
+    video.src = `/videos/${filename}`
     video.load()
 
     const curDuration = curItem.end_time - curItem.start_time
@@ -114,37 +147,56 @@ export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) 
     }
   }, [currentIndex, items])
 
-  // Scroll snap detection — detect which clip user scrolled to
+  // ── Wheel navigation ──
   useEffect(() => {
-    const scrollEl = scrollRef.current
-    if (!scrollEl) return
+    const el = playerRef.current
+    if (!el) return
 
-    // Initial scroll to startIndex
-    scrollEl.scrollTo({ top: startIndex * scrollEl.clientHeight, behavior: "instant" })
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      if (isAnimatingRef.current) return
 
-    const handleScroll = () => {
-      if (isScrollingRef.current) return
-
-      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current)
-      scrollTimeoutRef.current = setTimeout(() => {
-        const idx = Math.round(scrollEl.scrollTop / scrollEl.clientHeight)
-        const clamped = Math.max(0, Math.min(idx, items.length - 1))
-        if (clamped !== currentIndex) {
-          setCurrentIndex(clamped)
-          setProgress(0)
-          setLiked(false)
-        }
-      }, 150)
+      if (e.deltaY > 30) {
+        goToClip(currentIndexRef.current + 1)
+      } else if (e.deltaY < -30) {
+        goToClip(currentIndexRef.current - 1)
+      }
     }
 
-    scrollEl.addEventListener("scroll", handleScroll, { passive: true })
+    el.addEventListener("wheel", handleWheel, { passive: false })
+    return () => el.removeEventListener("wheel", handleWheel)
+  }, [goToClip])
+
+  // ── Touch swipe navigation ──
+  useEffect(() => {
+    const el = playerRef.current
+    if (!el) return
+
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartYRef.current = e.touches[0].clientY
+    }
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (touchStartYRef.current === null) return
+      const deltaY = touchStartYRef.current - e.changedTouches[0].clientY
+      touchStartYRef.current = null
+
+      if (deltaY > 50) {
+        goToClip(currentIndexRef.current + 1)
+      } else if (deltaY < -50) {
+        goToClip(currentIndexRef.current - 1)
+      }
+    }
+
+    el.addEventListener("touchstart", handleTouchStart, { passive: true })
+    el.addEventListener("touchend", handleTouchEnd, { passive: true })
     return () => {
-      scrollEl.removeEventListener("scroll", handleScroll)
-      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current)
+      el.removeEventListener("touchstart", handleTouchStart)
+      el.removeEventListener("touchend", handleTouchEnd)
     }
-  }, [startIndex, items.length, currentIndex])
+  }, [goToClip])
 
-  // Keyboard navigation
+  // ── Keyboard navigation ──
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       switch (e.key) {
@@ -153,11 +205,11 @@ export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) 
           break
         case "ArrowUp":
           e.preventDefault()
-          goToClip(currentIndex - 1)
+          goToClip(currentIndexRef.current - 1)
           break
         case "ArrowDown":
           e.preventDefault()
-          goToClip(currentIndex + 1)
+          goToClip(currentIndexRef.current + 1)
           break
         case " ":
           e.preventDefault()
@@ -170,20 +222,22 @@ export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) 
     }
     window.addEventListener("keydown", handleKey)
     return () => window.removeEventListener("keydown", handleKey)
-  }, [currentIndex, isPlaying, onClose, goToClip, togglePlay])
+  }, [onClose, goToClip, togglePlay])
 
-  // Sync muted
+  // ── Sync muted ──
   useEffect(() => {
     if (videoRef.current) videoRef.current.muted = isMuted
   }, [isMuted])
 
-  // Lock body scroll
+  // ── Lock body scroll ──
   useEffect(() => {
     document.body.style.overflow = "hidden"
-    return () => { document.body.style.overflow = "" }
+    return () => {
+      document.body.style.overflow = ""
+    }
   }, [])
 
-  // Click on progress bar to seek within clip
+  // ── Seek within clip ──
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
     e.stopPropagation()
     const rect = e.currentTarget.getBoundingClientRect()
@@ -200,7 +254,9 @@ export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) 
     <div
       ref={backdropRef}
       className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex items-center justify-center"
-      onClick={(e) => { if (e.target === backdropRef.current) onClose() }}
+      onClick={(e) => {
+        if (e.target === backdropRef.current) onClose()
+      }}
     >
       {/* Close button */}
       <button
@@ -217,19 +273,26 @@ export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) 
 
       {/* Main layout */}
       <div className="relative flex items-center gap-4 h-full max-h-[92vh] py-4">
-
         {/* Left side — Scene info panel (desktop only) */}
         <div className="hidden lg:flex flex-col justify-end w-72 h-full max-h-[calc(92vh-2rem)] pb-4">
           <div className="rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 p-5 space-y-4 max-h-[50%] overflow-y-auto no-scrollbar">
             <div>
-              <p className="text-white text-sm font-semibold line-clamp-2">{item.title}</p>
-              <p className="text-white/40 text-xs font-mono mt-1">{item.video_id}</p>
+              <p className="text-white text-sm font-semibold line-clamp-2">
+                {item.title}
+              </p>
+              <p className="text-white/40 text-xs font-mono mt-1">
+                {item.video_id}
+              </p>
             </div>
 
             {cleanText && (
               <div>
-                <p className="text-white/50 text-[10px] uppercase tracking-wider font-semibold mb-1">Description</p>
-                <p className="text-white/70 text-xs leading-relaxed">{cleanText}</p>
+                <p className="text-white/50 text-[10px] uppercase tracking-wider font-semibold mb-1">
+                  Description
+                </p>
+                <p className="text-white/70 text-xs leading-relaxed">
+                  {cleanText}
+                </p>
               </div>
             )}
 
@@ -246,97 +309,103 @@ export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) 
           </div>
         </div>
 
-        {/* Center — Scroll-snap container with video player */}
-        <div className="relative h-full aspect-[9/16] max-w-[400px]">
-          {/* The snap scroll container — each "page" represents a clip */}
+        {/* Center — Video player */}
+        <div
+          ref={playerRef}
+          className="relative h-full aspect-[9/16] max-w-[400px] rounded-2xl overflow-hidden bg-black"
+        >
+          {/*
+            Video container — always mounted, NEVER remounted.
+            Transitions are driven imperatively via videoContainerRef.
+          */}
           <div
-            ref={scrollRef}
-            className="h-full w-full overflow-y-scroll snap-y snap-mandatory no-scrollbar rounded-2xl"
+            ref={videoContainerRef}
+            className="h-full w-full relative"
+            style={{ willChange: "transform, opacity" }}
           >
-            {items.map((clipItem, idx) => (
+            {/* Thumbnail poster — visible while video loads */}
+            <img
+              src={item.thumbnail_url}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover -z-[1]"
+            />
+
+            <video
+              ref={videoRef}
+              muted={isMuted}
+              playsInline
+              className="h-full w-full object-cover"
+            />
+
+            {/* Tap to play/pause */}
+            <div
+              onClick={(e) => {
+                e.stopPropagation()
+                togglePlay()
+              }}
+              className="absolute inset-0 z-10"
+            >
+              {!isPlaying && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/20 animate-fade-in-fast">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm">
+                    <Play className="h-7 w-7 text-white fill-white ml-1" />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Progress bar — top */}
+            <div
+              className="absolute top-0 left-0 right-0 h-1 bg-white/10 z-20 cursor-pointer"
+              onClick={handleProgressClick}
+            >
               <div
-                key={`${clipItem.video_id}-${clipItem.start_time}-${idx}`}
-                className="h-full w-full snap-start snap-always shrink-0 relative"
-              >
-                {/* Only the active clip gets the real video */}
-                {idx === currentIndex ? (
-                  // Active clip — real video player
-                  <div className="h-full w-full bg-black relative overflow-hidden">
-                    <video
-                      ref={videoRef}
-                      muted={isMuted}
-                      playsInline
-                      className="h-full w-full object-cover"
-                    />
+                className="h-full bg-white/90 transition-[width] duration-100 ease-linear"
+                style={{ width: `${progress * 100}%` }}
+              />
+            </div>
 
-                    {/* Click to play/pause */}
-                    <div
-                      onClick={(e) => { e.stopPropagation(); togglePlay() }}
-                      className="absolute inset-0 z-10"
-                    >
-                      {!isPlaying && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm">
-                            <Play className="h-7 w-7 text-white fill-white ml-1" />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Progress bar — top */}
-                    <div
-                      className="absolute top-0 left-0 right-0 h-1 bg-white/10 z-20 cursor-pointer"
-                      onClick={handleProgressClick}
-                    >
-                      <div
-                        className="h-full bg-white/90 transition-[width] duration-100 ease-linear"
-                        style={{ width: `${progress * 100}%` }}
-                      />
-                    </div>
-
-                    {/* Bottom info overlay */}
-                    <div className="absolute bottom-0 left-0 right-0 z-20 p-4 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none">
-                      <div className="lg:hidden">
-                        <p className="text-white text-sm font-semibold line-clamp-2 drop-shadow-lg">{item.title}</p>
-                        {cleanText && (
-                          <p className="text-white/60 text-xs mt-1 line-clamp-2">{cleanText}</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3 mt-2 text-[11px] text-white/60">
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {formatTime(item.start_time)} — {formatTime(item.end_time)}
-                        </span>
-                        <span className="flex items-center gap-1 bg-white/10 px-1.5 py-0.5 rounded">
-                          {similarityPercent}% match
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  // Inactive clip — thumbnail placeholder
-                  <div className="h-full w-full bg-black relative overflow-hidden flex items-center justify-center">
-                    <img
-                      src={clipItem.thumbnail_url}
-                      alt={clipItem.title}
-                      className="h-full w-full object-cover opacity-50"
-                      loading="lazy"
-                    />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm">
-                        <Play className="h-6 w-6 text-white fill-white ml-0.5" />
-                      </div>
-                    </div>
-                    {/* Title overlay */}
-                    <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
-                      <p className="text-white text-sm font-semibold line-clamp-1 drop-shadow-lg">{clipItem.title}</p>
-                      <p className="text-white/50 text-xs mt-0.5">{cleanSceneText(clipItem.text)}</p>
-                    </div>
-                  </div>
+            {/* Bottom info overlay */}
+            <div className="absolute bottom-0 left-0 right-0 z-20 p-4 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none">
+              <div className="lg:hidden">
+                <p className="text-white text-sm font-semibold line-clamp-2 drop-shadow-lg">
+                  {item.title}
+                </p>
+                {cleanText && (
+                  <p className="text-white/60 text-xs mt-1 line-clamp-2">
+                    {cleanText}
+                  </p>
                 )}
               </div>
-            ))}
+              <div className="flex items-center gap-3 mt-2 text-[11px] text-white/60">
+                <span className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  {formatTime(item.start_time)} — {formatTime(item.end_time)}
+                </span>
+                <span className="flex items-center gap-1 bg-white/10 px-1.5 py-0.5 rounded">
+                  {similarityPercent}% match
+                </span>
+              </div>
+            </div>
           </div>
+
+          {/* Navigation hint arrows */}
+          {currentIndex > 0 && (
+            <button
+              onClick={() => goToClip(currentIndex - 1)}
+              className="absolute top-3 left-1/2 -translate-x-1/2 z-30 flex h-7 w-7 items-center justify-center rounded-full bg-black/30 text-white/50 hover:bg-black/50 hover:text-white transition-all"
+            >
+              <ChevronUp className="h-4 w-4" />
+            </button>
+          )}
+          {currentIndex < items.length - 1 && (
+            <button
+              onClick={() => goToClip(currentIndex + 1)}
+              className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex h-7 w-7 items-center justify-center rounded-full bg-black/30 text-white/50 hover:bg-black/50 hover:text-white transition-all animate-bounce-subtle"
+            >
+              <ChevronDown className="h-4 w-4" />
+            </button>
+          )}
         </div>
 
         {/* Right side — Action buttons */}
@@ -346,11 +415,15 @@ export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) 
             onClick={() => setLiked(!liked)}
             className="flex flex-col items-center gap-1"
           >
-            <div className={`
+            <div
+              className={`
               flex h-10 w-10 items-center justify-center rounded-full transition-all duration-200
               ${liked ? "bg-primary/20 text-primary" : "bg-white/10 text-white hover:bg-white/20"}
-            `}>
-              <Heart className={`h-5 w-5 transition-transform duration-200 ${liked ? "fill-primary scale-110" : ""}`} />
+            `}
+            >
+              <Heart
+                className={`h-5 w-5 transition-transform duration-200 ${liked ? "fill-primary scale-110" : ""}`}
+              />
             </div>
             <span className="text-[10px] text-white/60">Like</span>
           </button>
@@ -377,9 +450,15 @@ export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) 
             className="flex flex-col items-center gap-1"
           >
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors">
-              {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+              {isMuted ? (
+                <VolumeX className="h-5 w-5" />
+              ) : (
+                <Volume2 className="h-5 w-5" />
+              )}
             </div>
-            <span className="text-[10px] text-white/60">{isMuted ? "Unmute" : "Mute"}</span>
+            <span className="text-[10px] text-white/60">
+              {isMuted ? "Unmute" : "Mute"}
+            </span>
           </button>
         </div>
       </div>

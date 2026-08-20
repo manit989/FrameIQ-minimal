@@ -33,6 +33,44 @@ app.add_middleware(
 def health():
     return {"status": "ok", "service": "FrameIQ API"}
 
+@app.get("/api/videos")
+def list_videos():
+    """Return all distinct analyzed videos with a representative thumbnail and scene count."""
+    try:
+        table = get_or_create_table()
+        rows = table.to_arrow().to_pylist()
+    except Exception:
+        return {"videos": []}
+
+    # Group rows by video_id, pick the earliest scene as representative
+    grouped: dict[str, list] = {}
+    for row in rows:
+        vid = row["video_id"]
+        if vid == "init":
+            continue
+        grouped.setdefault(vid, []).append(row)
+
+    videos = []
+    for vid, scenes in grouped.items():
+        scenes.sort(key=lambda r: r["start_time"])
+        first = scenes[0]
+        last = scenes[-1]
+        start_sec = int(round(first["start_time"]))
+        total_duration = last["end_time"]
+        mins = int(total_duration // 60)
+        secs = int(total_duration % 60)
+
+        videos.append({
+            "video_id": vid,
+            "video_filename": first.get("video_filename", f"{vid}.mp4"),
+            "title": first["title"],
+            "thumbnail_url": f"/snapshots/{vid}_{start_sec}s.jpg",
+            "scene_count": len(scenes),
+            "duration": f"{mins}:{secs:02d}",
+        })
+
+    return {"videos": videos}
+
 @app.get("/search", response_model=SearchResponse)
 def get_videos(query: str, limit: int = 10):
     query_vector = get_embedding(query)
