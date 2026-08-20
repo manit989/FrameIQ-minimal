@@ -16,6 +16,7 @@ class SceneCaption(BaseModel):
 
 class SearchResultItem(BaseModel):
     video_id: str
+    video_filename: str  # Added to track exact filename with format (.webm, .mp4)
     title: str
     start_time: float
     end_time: float
@@ -29,19 +30,17 @@ class SearchResponse(BaseModel):
     results: list[SearchResultItem]
 
 class VideoAnalysisRequest(BaseModel):
-    # Only ask for the video; the system handles the rest
     video_filename: str = Field(default="output.mp4")
-
 
 class VideoAnalysisResponse(BaseModel):
     video_filename: str
     total_scenes: int
     scenes: list[SceneCaption]
 
-
 class Items(BaseModel):
     vector: list[float]
     video_id: str
+    video_filename: str  # Added to persist extension in LanceDB
     title: str
     start_time: float
     end_time: float
