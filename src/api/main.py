@@ -41,13 +41,18 @@ def get_videos(query: str, limit: int = 10):
 
     results = []
     for row in raw_results:
+        # Use int(round(...)) to prevent decimal mismatches on frame snapshots
+        start_sec = int(round(row["start_time"]))
+        
         results.append(SearchResultItem(
             video_id=row["video_id"],
+            # Retrieve exact extension stored in LanceDB, fallback to .mp4 for legacy rows
+            video_filename=row.get("video_filename", f"{row['video_id']}.mp4"),
             title=row["title"],
             start_time=row["start_time"],
             end_time=row["end_time"],
             text=row.get("text", ""),
-            thumbnail_url=f"/snapshots/{row['video_id']}_{int(row['start_time'])}s.jpg",
+            thumbnail_url=f"/snapshots/{row['video_id']}_{start_sec}s.jpg",
             similarity_score=1 - row.get("_distance", 0),
         ))
 
@@ -59,7 +64,7 @@ async def analyze_video(file: UploadFile):
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file uploaded.")
 
-    # Generate a UUID-based video_id and preserve the original extension
+    # Generate a UUID-based video_id and preserve the original extension (.webm, .mp4, etc.)
     ext = file.filename.rsplit('.', 1)[-1] if '.' in file.filename else "mp4"
     video_id = uuid.uuid4().hex[:12]
     video_filename = f"{video_id}.{ext}"
@@ -78,7 +83,10 @@ async def analyze_video(file: UploadFile):
 
     audio_db_items = process_audio(audio_path, video_id, title)
 
-    scenes, video_db_items = analyze_and_extract_video(video_path, SNAPSHOTS_DIR, video_id, title)
+    # Passed video_filename as an extra parameter to track extension in LanceDB
+    scenes, video_db_items = analyze_and_extract_video(
+        video_path, SNAPSHOTS_DIR, video_id, title, video_filename
+    )
 
     all_db_items = video_db_items + audio_db_items
     insert_to_lancedb(all_db_items)
