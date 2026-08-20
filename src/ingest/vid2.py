@@ -1,10 +1,11 @@
 import os
 import time
 import cv2
+import json
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-from src.models.models import SceneCaption, VideoAnalysisResponse, Items
+from src.models.models import SceneCaption, Items
 from src.ingest.embedder import get_embedding
 
 load_dotenv()
@@ -28,19 +29,27 @@ def extract_snapshots(video_path: str, scenes: list[SceneCaption], output_dir: s
         raise IOError(f"Unable to open video source at '{video_path}'")
 
     fps = cap.get(cv2.CAP_PROP_FPS)
-    for idx, scene in enumerate(scenes, start=1):
-        # Use start_time to grab the representative frame
-        frame_number = int(fps * scene.start_time)
+    for scene in scenes:
+        # Round explicitly to prevent floating-point mismatch with search endpoint
+        start_sec = int(round(scene.start_time))
+        frame_number = int(fps * start_sec)
+        
         cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
         ret, frame = cap.read()
         if ret:
-            snapshot_filename = f"{video_id}_{int(scene.start_time)}s.jpg"
+            snapshot_filename = f"{video_id}_{start_sec}s.jpg"
             snapshot_path = os.path.join(output_dir, snapshot_filename)
             cv2.imwrite(snapshot_path, frame)
             scene.snapshot_url = f"/snapshots/{snapshot_filename}"
     cap.release()
 
-def analyze_and_extract_video(video_path: str, output_dir: str, video_id: str, title: str) -> tuple[list[SceneCaption], list[Items]]:
+def analyze_and_extract_video(
+    video_path: str, 
+    output_dir: str, 
+    video_id: str, 
+    title: str, 
+    video_filename: str  # Accepted parameter
+) -> tuple[list[SceneCaption], list[Items]]:
     video_file = upload_video(video_path)
 
     prompt = (
@@ -65,7 +74,6 @@ def analyze_and_extract_video(video_path: str, output_dir: str, video_id: str, t
         "- search_tags: 5 high-level keywords a user would search to find this type of content\n"
     )
 
-    # Define a clean schema for Gemini (no Optional/union types which break the API)
     gemini_schema = {
         "type": "object",
         "properties": {
@@ -120,11 +128,9 @@ def analyze_and_extract_video(video_path: str, output_dir: str, video_id: str, t
         ),
     )
 
-    import json
     raw = response.text
     data = json.loads(raw)
 
-    # Handle both possible shapes: {"scenes": [...]} or bare [...]
     if isinstance(data, dict):
         scene_dicts = data.get("scenes", [])
     elif isinstance(data, list):
@@ -136,10 +142,8 @@ def analyze_and_extract_video(video_path: str, output_dir: str, video_id: str, t
     
     extract_snapshots(video_path, scenes, output_dir, video_id)
 
-    # Build rich text for embedding from all the scene metadata
     video_items = []
     for scene in scenes:
-        print(scene)
         figures_str = ', '.join(scene.recognized_figures) if scene.recognized_figures else 'none'
         scene_text = (
             f"[SCENE] {scene.visual_description} | "
@@ -157,6 +161,7 @@ def analyze_and_extract_video(video_path: str, output_dir: str, video_id: str, t
         item = Items(
             vector=vector,
             video_id=video_id,
+            video_filename=video_filename,  # Stored in LanceDB
             title=title,
             start_time=scene.start_time,
             end_time=scene.end_time,
