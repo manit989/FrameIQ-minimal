@@ -4,7 +4,6 @@ from groq import Groq
 from src.models.models import Items
 from src.ingest.embedder import get_embedding
 
-
 client = Groq()
 
 def extract_audio(video_path: str, audio_path: str):
@@ -26,7 +25,7 @@ def extract_audio(video_path: str, audio_path: str):
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"FFMPEG failed to extract audio: {e}")
 
-def process_audio(audio_path: str, video_id: str, title: str) -> list[Items]:
+def process_audio(audio_path: str, video_id: str, title: str, video_filename: str) -> list[Items]:
     with open(audio_path, "rb") as file:
         transcription = client.audio.transcriptions.create(
           file=(audio_path, file.read()),
@@ -45,6 +44,7 @@ def process_audio(audio_path: str, video_id: str, title: str) -> list[Items]:
         item = Items(
             vector=vector,
             video_id=video_id,
+            video_filename=video_filename,  # Added missing field
             title=title,
             start_time=segment['start'],
             end_time=segment['end'],

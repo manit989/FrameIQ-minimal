@@ -81,7 +81,8 @@ async def analyze_video(file: UploadFile):
 
     extract_audio(video_path, audio_path)
 
-    audio_db_items = process_audio(audio_path, video_id, title)
+    # Added video_filename parameter
+    audio_db_items = process_audio(audio_path, video_id, title, video_filename)
 
     # Passed video_filename as an extra parameter to track extension in LanceDB
     scenes, video_db_items = analyze_and_extract_video(
