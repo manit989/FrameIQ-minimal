@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from src.ingest.vid2 import analyze_and_extract_video
+from src.ingest.vid2 import analyze_and_extract_video, extract_snapshots_for_timestamps
 from src.ingest.aud import extract_audio, process_audio
 from src.ingest.pipeline import insert_to_lancedb
 from src.models.models import VideoAnalysisResponse, SearchResultItem, SearchResponse
@@ -81,15 +81,20 @@ async def analyze_video(file: UploadFile):
 
     extract_audio(video_path, audio_path)
 
-    # Added video_filename parameter
+    # Process audio segments
     audio_db_items = process_audio(audio_path, video_id, title, video_filename)
 
-    # Passed video_filename as an extra parameter to track extension in LanceDB
+    # Analyze video scenes
     scenes, video_db_items = analyze_and_extract_video(
         video_path, SNAPSHOTS_DIR, video_id, title, video_filename
     )
 
     all_db_items = video_db_items + audio_db_items
+
+    # Extract snapshots for ALL indexed timestamps (video + audio) to prevent 404s on search results
+    all_timestamps = [int(round(item.start_time)) for item in all_db_items]
+    extract_snapshots_for_timestamps(video_path, all_timestamps, SNAPSHOTS_DIR, video_id)
+
     insert_to_lancedb(all_db_items)
 
     return VideoAnalysisResponse(

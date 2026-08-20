@@ -23,6 +23,7 @@ export interface VideoAnalysisResponse {
 
 export interface SearchResultItem {
   video_id: string
+  video_filename?: string
   title: string
   start_time: number
   end_time: number

@@ -128,7 +128,10 @@ function SearchResultCard({ item, index, onOpen }: SearchResultCardProps) {
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const timeCheckRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const videoUrl = `/videos/${item.video_id}.mp4`
+  // Use video_filename from API response to avoid hardcoded .mp4 404 errors
+  const videoUrl = item.video_filename
+    ? `/videos/${item.video_filename}`
+    : `/videos/${item.video_id}.mp4`
 
   const formatTime = (s: number) => {
     const min = Math.floor(s / 60)
