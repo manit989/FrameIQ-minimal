@@ -28,6 +28,7 @@ export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) 
   const [isMuted, setIsMuted] = useState(false)
   const [progress, setProgress] = useState(0)
   const [liked, setLiked] = useState(false)
+  const [videoDuration, setVideoDuration] = useState<number | null>(null)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const videoContainerRef = useRef<HTMLDivElement>(null)
@@ -55,7 +56,7 @@ export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) 
     return `${min}:${sec.toString().padStart(2, "0")}`
   }
 
-  const clipDuration = item.end_time - item.start_time
+  const clipDuration = videoDuration ? videoDuration - item.start_time : (item.end_time - item.start_time)
 
   const togglePlay = useCallback(() => {
     const video = videoRef.current
@@ -103,6 +104,7 @@ export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) 
       setCurrentIndex(newIndex)
       setProgress(0)
       setLiked(false)
+      setVideoDuration(null)
 
       // Phase 3 — Slide in (double-rAF ensures the browser committed the jump)
       requestAnimationFrame(() => {
@@ -132,26 +134,37 @@ export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) 
     video.src = `/videos/${filename}`
     video.load()
 
-    const curDuration = curItem.end_time - curItem.start_time
-
     const handleCanPlay = () => {
       video.currentTime = curItem.start_time
       video.play().then(() => setIsPlaying(true)).catch(() => {})
     }
+    
+    const handleLoadedMetadata = () => {
+      setVideoDuration(video.duration)
+    }
+
+    const handleEnded = () => {
+      video.currentTime = curItem.start_time
+      video.play().catch(() => {})
+    }
+
     video.addEventListener("canplay", handleCanPlay, { once: true })
+    video.addEventListener("loadedmetadata", handleLoadedMetadata)
+    video.addEventListener("ended", handleEnded)
 
     if (timeCheckRef.current) clearInterval(timeCheckRef.current)
     timeCheckRef.current = setInterval(() => {
       if (!video) return
+      const currentVidDuration = video.duration || curItem.end_time
+      const actualCurDuration = currentVidDuration - curItem.start_time
       const elapsed = video.currentTime - curItem.start_time
-      setProgress(Math.min(Math.max(elapsed / curDuration, 0), 1))
-      if (video.currentTime >= curItem.end_time) {
-        video.currentTime = curItem.start_time
-      }
+      setProgress(Math.min(Math.max(elapsed / actualCurDuration, 0), 1))
     }, 50)
 
     return () => {
       video.removeEventListener("canplay", handleCanPlay)
+      video.removeEventListener("loadedmetadata", handleLoadedMetadata)
+      video.removeEventListener("ended", handleEnded)
       if (timeCheckRef.current) clearInterval(timeCheckRef.current)
     }
   }, [currentIndex, items])
@@ -321,7 +334,7 @@ export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) 
             <div className="flex items-center gap-3 text-xs text-white/50">
               <span className="flex items-center gap-1">
                 <Clock className="h-3 w-3" />
-                {formatTime(item.start_time)} — {formatTime(item.end_time)}
+                {formatTime(item.start_time)} — {videoDuration ? formatTime(videoDuration) : formatTime(item.end_time)}
               </span>
               <span className="flex items-center gap-1">
                 <Sparkles className="h-3 w-3" />
@@ -402,7 +415,7 @@ export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) 
               <div className="flex items-center gap-3 mt-2 text-[11px] text-white/60">
                 <span className="flex items-center gap-1">
                   <Clock className="h-3 w-3" />
-                  {formatTime(item.start_time)} — {formatTime(item.end_time)}
+                  {formatTime(item.start_time)} — {videoDuration ? formatTime(videoDuration) : formatTime(item.end_time)}
                 </span>
                 <span className="flex items-center gap-1 bg-white/10 px-1.5 py-0.5 rounded">
                   {similarityPercent}% match

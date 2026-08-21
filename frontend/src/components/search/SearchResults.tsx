@@ -136,9 +136,9 @@ function SearchResultCard({ item, index, onOpen }: SearchResultCardProps) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [isMuted, setIsMuted] = useState(true)
   const [videoReady, setVideoReady] = useState(false)
+  const [videoDuration, setVideoDuration] = useState<number | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const timeCheckRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Use video_filename from API response to avoid hardcoded .mp4 404 errors
   const videoUrl = item.video_filename
@@ -153,7 +153,7 @@ function SearchResultCard({ item, index, onOpen }: SearchResultCardProps) {
 
   const similarityPercent = Math.round(item.similarity_score * 100)
 
-  // Start playback from start_time, loop at end_time
+  // Start playback from start_time, let it play until video ends naturally
   const startPlayback = useCallback(() => {
     const video = videoRef.current
     if (!video) return
@@ -162,14 +162,7 @@ function SearchResultCard({ item, index, onOpen }: SearchResultCardProps) {
     video.play().then(() => {
       setIsPlaying(true)
     }).catch(() => {})
-
-    if (timeCheckRef.current) clearInterval(timeCheckRef.current)
-    timeCheckRef.current = setInterval(() => {
-      if (video.currentTime >= item.end_time) {
-        video.currentTime = item.start_time
-      }
-    }, 100)
-  }, [item.start_time, item.end_time])
+  }, [item.start_time])
 
   const stopPlayback = useCallback(() => {
     const video = videoRef.current
@@ -178,11 +171,6 @@ function SearchResultCard({ item, index, onOpen }: SearchResultCardProps) {
     video.pause()
     setIsPlaying(false)
     setVideoReady(false)
-
-    if (timeCheckRef.current) {
-      clearInterval(timeCheckRef.current)
-      timeCheckRef.current = null
-    }
   }, [])
 
   const handleMouseEnter = () => {
@@ -209,11 +197,21 @@ function SearchResultCard({ item, index, onOpen }: SearchResultCardProps) {
     setVideoReady(true)
   }
 
+  const handleVideoLoadedMetadata = (e: React.SyntheticEvent<HTMLVideoElement>) => {
+    setVideoDuration(e.currentTarget.duration)
+  }
+
+  const handleVideoEnded = () => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = item.start_time
+      videoRef.current.play().catch(() => {})
+    }
+  }
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
-      if (timeCheckRef.current) clearInterval(timeCheckRef.current)
     }
   }, [])
 
@@ -259,8 +257,10 @@ function SearchResultCard({ item, index, onOpen }: SearchResultCardProps) {
           src={videoUrl}
           muted={isMuted}
           playsInline
-          preload="none"
+          preload="metadata"
           onCanPlay={handleVideoCanPlay}
+          onLoadedMetadata={handleVideoLoadedMetadata}
+          onEnded={handleVideoEnded}
           className={`
             absolute inset-0 h-full w-full object-cover transition-opacity duration-300
             ${isPlaying && videoReady ? "opacity-100" : "opacity-0"}
@@ -297,7 +297,7 @@ function SearchResultCard({ item, index, onOpen }: SearchResultCardProps) {
         {/* Time range badge — bottom left */}
         <div className="absolute bottom-2 left-2 flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-black/70 backdrop-blur-sm text-[10px] font-medium text-white">
           <Clock className="h-2.5 w-2.5" />
-          {formatTime(item.start_time)} — {formatTime(item.end_time)}
+          {formatTime(item.start_time)} — {videoDuration ? formatTime(videoDuration) : formatTime(item.end_time)}
         </div>
 
         {/* Similarity score — bottom right, subtle */}
