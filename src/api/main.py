@@ -32,7 +32,7 @@ from src.errors import (
     UploadValidationError,
 )
 
-app = FastAPI(title="FrameIQ API")
+app = FastAPI(title="FrameIQ API", version="1.0.0")
 register_error_handlers(app)
 
 logger = logging.getLogger(__name__)
@@ -43,8 +43,21 @@ MAX_UPLOAD_SIZE_MB = 500
 MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024
 UPLOAD_CHUNK_SIZE = 1024 * 1024
 SUPPORTED_VIDEO_EXTENSIONS = {"mp4", "mov", "avi", "webm", "mkv", "m4v"}
+
 os.makedirs(VIDEOS_DIR, exist_ok=True)
 os.makedirs(SNAPSHOTS_DIR, exist_ok=True)
+
+app.mount("/snapshots", StaticFiles(directory=SNAPSHOTS_DIR), name="snapshots")
+app.mount("/videos", StaticFiles(directory=VIDEOS_DIR), name="videos")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["X-Request-ID"],
+)
 
 
 def _video_items_from_rows(rows: list[dict]) -> list[VideoListItem]:
@@ -52,34 +65,36 @@ def _video_items_from_rows(rows: list[dict]) -> list[VideoListItem]:
     try:
         grouped: dict[str, list[dict]] = {}
         for row in rows:
-            video_id = row["video_id"]
-            if video_id == "init":
+            video_id = row.get("video_id")
+            if not video_id or video_id == "init":
                 continue
             grouped.setdefault(video_id, []).append(row)
 
         videos = []
         for video_id, scenes in grouped.items():
-            scenes.sort(key=lambda row: row["start_time"])
+            scenes.sort(key=lambda r: r.get("start_time", 0.0))
             first = scenes[0]
             last = scenes[-1]
-            start_sec = int(round(first["start_time"]))
-            total_duration = last["end_time"]
+            start_sec = int(round(first.get("start_time", 0.0)))
+            total_duration = last.get("end_time", 0.0)
             mins = int(total_duration // 60)
             secs = int(total_duration % 60)
 
-            videos.append(VideoListItem(
-                video_id=video_id,
-                video_filename=first.get("video_filename", f"{video_id}.mp4"),
-                original_filename=(
-                    first.get("original_filename")
-                    or first.get("title")
-                    or first.get("video_filename", f"{video_id}.mp4")
-                ),
-                title=first["title"],
-                thumbnail_url=f"/snapshots/{video_id}_{start_sec}s.jpg",
-                scene_count=len(scenes),
-                duration=f"{mins}:{secs:02d}",
-            ))
+            videos.append(
+                VideoListItem(
+                    video_id=video_id,
+                    video_filename=first.get("video_filename", f"{video_id}.mp4"),
+                    original_filename=(
+                        first.get("original_filename")
+                        or first.get("title")
+                        or first.get("video_filename", f"{video_id}.mp4")
+                    ),
+                    title=first.get("title", "Untitled"),
+                    thumbnail_url=f"/snapshots/{video_id}_{start_sec}s.jpg",
+                    scene_count=len(scenes),
+                    duration=f"{mins}:{secs:02d}",
+                )
+            )
     except (KeyError, TypeError, ValueError) as exc:
         raise DatabaseDataError() from exc
 
@@ -94,21 +109,11 @@ def _title_match_rank(title: str, normalized_query: str) -> int:
         return 1
     return 2
 
-app.mount("/snapshots", StaticFiles(directory=SNAPSHOTS_DIR), name="snapshots")
-app.mount("/videos", StaticFiles(directory=VIDEOS_DIR), name="videos")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["X-Request-ID"],
-)
 
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "FrameIQ API"}
+
 
 @app.get("/api/videos", response_model=VideoListResponse)
 def list_videos():
@@ -132,11 +137,13 @@ def search_video_titles(
         for video in _video_items_from_rows(get_video_metadata_items())
         if casefolded_query in video.title.casefold()
     ]
-    matching_videos.sort(key=lambda video: (
-        _title_match_rank(video.title, casefolded_query),
-        video.title.casefold(),
-        video.video_id,
-    ))
+    matching_videos.sort(
+        key=lambda video: (
+            _title_match_rank(video.title, casefolded_query),
+            video.title.casefold(),
+            video.video_id,
+        )
+    )
     results = matching_videos[:limit]
 
     return TitleSearchResponse(
@@ -144,6 +151,7 @@ def search_video_titles(
         count=len(results),
         results=results,
     )
+
 
 @app.get("/search", response_model=SearchResponse)
 def get_videos(
@@ -160,45 +168,45 @@ def get_videos(
     try:
         results = []
         for row in raw_results:
-            # Use int(round(...)) to prevent decimal mismatches on frame snapshots.
-            start_sec = int(round(row["start_time"]))
+            start_sec = int(round(row.get("start_time", 0.0)))
+            raw_dist = row.get("_distance", 1.0)
+            similarity_score = max(0.0, min(1.0, 1.0 - raw_dist))
 
-            results.append(SearchResultItem(
-                video_id=row["video_id"],
-                # Retrieve exact extension stored in LanceDB, fallback to .mp4 for legacy rows.
-                video_filename=row.get("video_filename", f"{row['video_id']}.mp4"),
-                title=row["title"],
-                start_time=row["start_time"],
-                end_time=row["end_time"],
-                text=row.get("text", ""),
-                thumbnail_url=f"/snapshots/{row['video_id']}_{start_sec}s.jpg",
-                similarity_score=1 - row.get("_distance", 0),
-            ))
+            results.append(
+                SearchResultItem(
+                    video_id=row["video_id"],
+                    video_filename=row.get("video_filename", f"{row['video_id']}.mp4"),
+                    title=row["title"],
+                    start_time=row.get("start_time", 0.0),
+                    end_time=row.get("end_time", 0.0),
+                    text=row.get("text", ""),
+                    thumbnail_url=f"/snapshots/{row['video_id']}_{start_sec}s.jpg",
+                    similarity_score=round(similarity_score, 4),
+                )
+            )
     except (KeyError, TypeError, ValueError) as exc:
         raise DatabaseDataError() from exc
 
     return SearchResponse(query=normalized_query, count=len(results), results=results)
+
 
 @app.post("/api/analyze", response_model=VideoAnalysisResponse)
 async def analyze_video(
     file: UploadFile,
     title: str = Form(..., min_length=1, max_length=200),
 ):
-    # Validate that an actual video was uploaded
     if not file.filename:
         raise UploadValidationError("No video file was uploaded.")
 
-    title = title.strip()
-    if not title:
+    clean_title = title.strip()
+    if not clean_title:
         raise UploadValidationError("Video title is required.")
 
     original_filename = file.filename.replace("\\", "/").rsplit("/", 1)[-1]
     if not original_filename:
         raise UploadValidationError("The uploaded video has no filename.")
 
-    # Generate a UUID-based video_id and preserve the original extension (.webm, .mp4, etc.)
-    ext = original_filename.rsplit('.', 1)[-1] if '.' in original_filename else "mp4"
-    ext = ext.lower()
+    ext = original_filename.rsplit(".", 1)[-1].lower() if "." in original_filename else "mp4"
     if ext not in SUPPORTED_VIDEO_EXTENSIONS:
         raise UnsupportedVideoError()
 
@@ -212,22 +220,28 @@ async def analyze_video(
     try:
         await _save_upload(file, video_path)
 
-        await run_in_threadpool(extract_audio, video_path, audio_path)
-        audio_db_items = await run_in_threadpool(
-            process_audio,
-            audio_path,
-            video_id,
-            title,
-            video_filename,
-            original_filename,
-        )
+        # 1. Process Audio gracefully (skip if video has no audio channel)
+        audio_db_items = []
+        try:
+            await run_in_threadpool(extract_audio, video_path, audio_path)
+            audio_db_items = await run_in_threadpool(
+                process_audio,
+                audio_path,
+                video_id,
+                clean_title,
+                video_filename,
+                original_filename,
+            )
+        except Exception as exc:
+            logger.warning("Audio extraction skipped or failed for video %s: %r", video_id, exc)
 
+        # 2. Process Visual Scenes
         scenes, video_db_items = await run_in_threadpool(
             analyze_and_extract_video,
             video_path,
             SNAPSHOTS_DIR,
             video_id,
-            title,
+            clean_title,
             video_filename,
             original_filename,
         )
@@ -236,8 +250,8 @@ async def analyze_video(
         if not all_db_items:
             raise AnalysisEmptyError()
 
-        # Extract snapshots for all indexed timestamps to prevent broken search thumbnails.
-        all_timestamps = [int(round(item.start_time)) for item in all_db_items]
+        # 3. Extract Snapshots for all scene timestamps
+        all_timestamps = list({int(round(item.start_time)) for item in all_db_items})
         await run_in_threadpool(
             extract_snapshots_for_timestamps,
             video_path,
@@ -246,13 +260,14 @@ async def analyze_video(
             video_id,
         )
 
+        # 4. Insert into LanceDB
         await run_in_threadpool(insert_to_lancedb, all_db_items)
         analysis_saved = True
 
         return VideoAnalysisResponse(
             video_filename=video_filename,
             original_filename=original_filename,
-            title=title,
+            title=clean_title,
             total_scenes=len(scenes),
             scenes=scenes,
         )
@@ -294,6 +309,7 @@ async def _save_upload(file: UploadFile, video_path: str) -> None:
                     written_bytes = destination.write(chunk)
                 except OSError as exc:
                     raise FileStorageError(storage_full=exc.errno == errno.ENOSPC) from exc
+
                 if written_bytes != len(chunk):
                     raise FileStorageError()
     except AppError:
