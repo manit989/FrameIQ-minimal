@@ -4,7 +4,7 @@ import subprocess
 from dotenv import load_dotenv
 from groq import Groq
 from src.models.models import Items
-from src.ingest.embedder import get_embedding
+from src.ingest.chunker import chunk_and_embed_transcript
 from src.errors import (
     AudioExtractionError,
     AudioFileReadError,
@@ -36,6 +36,7 @@ def get_groq_client():
             raise groq_error(exc, "client initialization") from exc
     return client
 
+
 def extract_audio(video_path: str, audio_path: str):
     """Dynamically extracts audio from the video file using FFmpeg."""
     if os.path.exists(audio_path):
@@ -66,6 +67,7 @@ def extract_audio(video_path: str, audio_path: str):
         raise AudioExtractionError() from exc
     except OSError as exc:
         raise MediaToolUnavailableError() from exc
+
 
 def process_audio(
     audio_path: str,
@@ -101,45 +103,13 @@ def process_audio(
             retryable=True,
         )
 
-    audio_items = []
-    for segment in segments:
-        try:
-            segment_text = segment["text"] if isinstance(segment, dict) else segment.text
-            start_time = segment["start"] if isinstance(segment, dict) else segment.start
-            end_time = segment["end"] if isinstance(segment, dict) else segment.end
-        except (AttributeError, KeyError, TypeError) as exc:
-            raise InvalidProviderResponseError(
-                code="GROQ_INVALID_RESPONSE",
-                message="Groq transcription returned malformed audio segments.",
-                status_code=502,
-                retryable=True,
-            ) from exc
-
-        if (
-            not isinstance(segment_text, str)
-            or not isinstance(start_time, (int, float))
-            or not isinstance(end_time, (int, float))
-        ):
-            raise InvalidProviderResponseError(
-                code="GROQ_INVALID_RESPONSE",
-                message="Groq transcription returned malformed audio segments.",
-                status_code=502,
-                retryable=True,
-            )
-
-        clean_text = f"[AUDIO] {segment_text}"
-        vector = get_embedding(clean_text)
-        
-        item = Items(
-            vector=vector,
-            video_id=video_id,
-            video_filename=video_filename,  # Added missing field
-            original_filename=original_filename,
-            title=title,
-            start_time=start_time,
-            end_time=end_time,
-            text=clean_text
-        )
-        audio_items.append(item)
+    # Delegate semantic topic grouping and vector context injection to chunker module
+    audio_items = chunk_and_embed_transcript(
+        segments=segments,
+        video_id=video_id,
+        title=title,
+        video_filename=video_filename,
+        original_filename=original_filename,
+    )
     
     return audio_items

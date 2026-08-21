@@ -50,6 +50,7 @@ def delete_uploaded_video(video_file) -> None:
     except Exception as exc:
         logger.warning("Could not delete Gemini file %s: %r", name, exc)
 
+
 def upload_video(video_file_name: str):
     video_file = None
     try:
@@ -87,6 +88,7 @@ def upload_video(video_file_name: str):
             delete_uploaded_video(video_file)
         raise gemini_error(exc, "video upload") from exc
 
+
 def extract_snapshots_for_timestamps(video_path: str, timestamps_sec: list[int], output_dir: str, video_id: str):
     """Extracts a frame snapshot for every timestamp in the provided list."""
     try:
@@ -122,6 +124,7 @@ def extract_snapshots_for_timestamps(video_path: str, timestamps_sec: list[int],
 
     if timestamps and written_count == 0:
         raise VideoDecodeError()
+
 
 def analyze_and_extract_video(
     video_path: str, 
@@ -218,19 +221,16 @@ def analyze_and_extract_video(
 
     video_items = []
     for scene in scenes:
-        figures_str = ', '.join(scene.recognized_figures) if scene.recognized_figures else 'none'
-        scene_text = (
-            f"[SCENE] {scene.visual_description} | "
-            f"Activity: {scene.activity_type} | "
-            f"Setting: {scene.setting} | "
-            f"Figures: {figures_str} | "
-            f"Objects: {', '.join(scene.detected_objects)} | "
-            f"Cues: {', '.join(scene.visual_cues)} | "
-            f"Audio: {scene.audio_genre_and_mood} | "
-            f"Intent: {scene.semantic_intent} | "
-            f"Tags: {', '.join(scene.search_tags)}"
+        figures_str = f" featuring {', '.join(scene.recognized_figures)}" if scene.recognized_figures else ""
+        objects_str = f" Visible items: {', '.join(scene.detected_objects)}." if scene.detected_objects else ""
+        
+        clean_vector_text = (
+            f"{scene.visual_description}{figures_str}. "
+            f"Activity: {scene.activity_type} in {scene.setting}. "
+            f"Intent: {scene.semantic_intent}.{objects_str}"
         )
-        vector = get_embedding(scene_text)
+        
+        vector = get_embedding(clean_vector_text)
         
         item = Items(
             vector=vector,
@@ -240,7 +240,7 @@ def analyze_and_extract_video(
             title=title,
             start_time=scene.start_time,
             end_time=scene.end_time,
-            text=scene_text,
+            text=f"[SCENE] {clean_vector_text}",
         )
         video_items.append(item)
 

@@ -1,7 +1,11 @@
+import os
 import lancedb
+from dotenv import load_dotenv
 from src.models.models import Items
 from scripts.getBackend import get_optimal_backend
 from src.errors import AppError, database_error
+
+load_dotenv()
 
 DB_PATH = "data/lancedb_storage"
 TABLE_NAME = "video_scenes"
@@ -15,10 +19,11 @@ VIDEO_METADATA_COLUMNS = [
 ]
 
 # Determine embedding dimension based on backend:
-#   - GPU/Apple Silicon → all-MiniLM-L6-v2 → 384 dims
-#   - CPU               → gemini-embedding-001 → 3072 dims
+#   - GPU / Apple Silicon -> all-MiniLM-L6-v2 -> 384 dims
+#   - CPU                 -> text-embedding-004 -> 768 dims
 _backend = get_optimal_backend()
-VECTOR_DIM = 384 if _backend in ("cuda", "apple_silicon") else 3072
+VECTOR_DIM = 384 if _backend in ("cuda", "apple_silicon") else 768
+
 
 def get_or_create_table():
     try:
@@ -39,21 +44,21 @@ def get_or_create_table():
 
         if "original_filename" not in table.schema.names:
             try:
-                # Legacy rows used the original upload filename as their title.
+                # Legacy schema migration fallback
                 table.add_columns({"original_filename": "title"})
             except Exception as exc:
                 raise database_error("migrate", exc) from exc
         return table
-    
+
     dummy_item = Items(
         vector=[0.0] * VECTOR_DIM,
         video_id="init",
-        video_filename="init.mp4",  # Added missing required field
+        video_filename="init.mp4",
         original_filename="init.mp4",
         title="init",
         start_time=0.0,
         end_time=0.0,
-        text=""
+        text="",
     )
     try:
         return db.create_table(
@@ -75,7 +80,7 @@ def get_all_items() -> list[dict]:
 
 
 def get_video_metadata_items() -> list[dict]:
-    """Read only the columns needed to list or title-search videos."""
+    """Reads only required metadata columns to streamline listing and title matching."""
     try:
         return (
             get_or_create_table()
@@ -96,6 +101,7 @@ def search_items(query_vector: list[float], limit: int) -> list[dict]:
         raise
     except Exception as exc:
         raise database_error("query", exc) from exc
+
 
 def insert_to_lancedb(items: list[Items]):
     if not items:
