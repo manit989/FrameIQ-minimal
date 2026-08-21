@@ -21,7 +21,7 @@ export function NavLeft({ onToggleSidebar, onNavigateHome }: NavLeftProps) {
         onClick={onNavigateHome}
         className="text-xl font-bold tracking-tight select-none hover:opacity-80 transition-opacity"
       >
-        Frame<span className="text-red-500">IQ</span>
+        Shor<span className="text-red-500">TS</span>
       </button>
     </div>
   )
