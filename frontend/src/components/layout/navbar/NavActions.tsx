@@ -1,4 +1,4 @@
-import { Plus, Bell, Upload } from "lucide-react"
+import { Bell, Upload } from "lucide-react"
 import { Button } from "../../ui/button"
 
 export function NavActions() {

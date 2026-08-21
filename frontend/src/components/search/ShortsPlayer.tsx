@@ -11,6 +11,7 @@ import {
   Sparkles,
   ChevronUp,
   ChevronDown,
+  ExternalLink,
 } from "lucide-react"
 import type { SearchResultItem } from "../../lib/api"
 import { cleanSceneText } from "../../lib/utils"
@@ -45,6 +46,8 @@ export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) 
 
   const item = items[currentIndex]
   const similarityPercent = Math.round(item.similarity_score * 100)
+  const fullVideoFilename = item.video_filename || `${item.video_id}.mp4`
+  const fullVideoUrl = `/videos/${encodeURIComponent(fullVideoFilename)}`
 
   const formatTime = (s: number) => {
     const min = Math.floor(s / 60)
@@ -63,6 +66,12 @@ export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) 
       video.pause()
       setIsPlaying(false)
     }
+  }, [])
+
+  const handleOpenFullVideo = useCallback((event: React.MouseEvent<HTMLAnchorElement>) => {
+    event.stopPropagation()
+    videoRef.current?.pause()
+    setIsPlaying(false)
   }, [])
 
   // ── Navigate between clips with smooth imperative animation ──
@@ -275,6 +284,19 @@ export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) 
       <div className="relative flex items-center gap-4 h-full max-h-[92vh] py-4">
         {/* Left side — Scene info panel (desktop only) */}
         <div className="hidden lg:flex flex-col justify-end w-72 h-full max-h-[calc(92vh-2rem)] pb-4">
+          <a
+            href={fullVideoUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={handleOpenFullVideo}
+            aria-label={`Watch full video: ${item.title} (opens in a new tab)`}
+            className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-semibold text-white backdrop-blur-sm transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+          >
+            <Play className="h-4 w-4 fill-current" />
+            <span>Watch full video</span>
+            <ExternalLink className="h-3.5 w-3.5 text-white/60" />
+          </a>
+
           <div className="rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 p-5 space-y-4 max-h-[50%] overflow-y-auto no-scrollbar">
             <div>
               <p className="text-white text-sm font-semibold line-clamp-2">
@@ -386,6 +408,18 @@ export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) 
                   {similarityPercent}% match
                 </span>
               </div>
+              <a
+                href={fullVideoUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={handleOpenFullVideo}
+                aria-label={`Watch full video: ${item.title} (opens in a new tab)`}
+                className="pointer-events-auto mt-3 inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 lg:hidden"
+              >
+                <Play className="h-3.5 w-3.5 fill-current" />
+                Watch full video
+                <ExternalLink className="h-3 w-3 text-white/60" />
+              </a>
             </div>
           </div>
 

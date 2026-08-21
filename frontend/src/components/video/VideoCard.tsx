@@ -154,8 +154,16 @@ export function VideoCard({ video, index = 0 }: VideoCardProps) {
       {/* Content overlay */}
       <div className="absolute inset-x-0 bottom-0 p-3 flex flex-col justify-end translate-y-2 group-hover:translate-y-0 transition-transform duration-300 z-10">
         {/* Title */}
-        <p className="text-[12px] font-semibold leading-snug text-white line-clamp-2 drop-shadow-lg mb-2">
+        <p className="text-[12px] font-semibold leading-snug text-white line-clamp-2 drop-shadow-lg mb-1">
           {video.title}
+        </p>
+
+        {/* Original uploaded filename */}
+        <p
+          title={video.original_filename}
+          className="text-[10px] text-zinc-300 truncate drop-shadow mb-2"
+        >
+          {video.original_filename}
         </p>
 
         {/* Stats row */}

@@ -1,10 +1,11 @@
 import { NavLeft } from "./NavLeft"
 import { NavSearch } from "./NavSearch"
 import { NavActions } from "./NavActions"
+import type { SearchMode } from "../../../lib/api"
 
 interface NavbarProps {
   onToggleSidebar: () => void
-  onSearch: (query: string) => void
+  onSearch: (query: string, mode: SearchMode) => void
   onNavigateHome: () => void
 }
 

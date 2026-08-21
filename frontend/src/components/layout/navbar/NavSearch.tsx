@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, type FormEvent } from "react"
 import { Search, Mic, Sparkles, X, ArrowUp, Loader2 } from "lucide-react"
 import { PerimeterLoader } from "../../search/PerimeterLoader"
+import type { SearchMode } from "../../../lib/api"
 
 interface NavSearchProps {
-  onSearch: (query: string) => void
+  onSearch: (query: string, mode: SearchMode) => void
 }
 
 export function NavSearch({ onSearch }: NavSearchProps) {
@@ -17,14 +18,16 @@ export function NavSearch({ onSearch }: NavSearchProps) {
   // Trigger perimeter loading animation on mode transform
   useEffect(() => {
     if (isAiMode) {
-      setAnimating(true)
       inputRef.current?.focus()
       const timer = setTimeout(() => setAnimating(false), 2200)
       return () => clearTimeout(timer)
     }
   }, [isAiMode])
 
-  const handleOpenAi = () => setIsAiMode(true)
+  const handleOpenAi = () => {
+    setAnimating(true)
+    setIsAiMode(true)
+  }
 
   const handleCloseAi = () => {
     setIsAiMode(false)
@@ -38,7 +41,7 @@ export function NavSearch({ onSearch }: NavSearchProps) {
     if (!searchQuery.trim() || isSearching) return
 
     setIsSearching(true)
-    onSearch(searchQuery.trim())
+    onSearch(searchQuery.trim(), "semantic")
 
     // Reset searching state after a brief delay (actual loading is handled by parent)
     setTimeout(() => {
@@ -50,7 +53,7 @@ export function NavSearch({ onSearch }: NavSearchProps) {
     e.preventDefault()
     const searchQuery = standardInputRef.current?.value || ""
     if (!searchQuery.trim()) return
-    onSearch(searchQuery.trim())
+    onSearch(searchQuery.trim(), "title")
   }
 
   return (
@@ -64,7 +67,7 @@ export function NavSearch({ onSearch }: NavSearchProps) {
             <input
               ref={standardInputRef}
               type="text"
-              placeholder="Search videos, scenes, objects…"
+              placeholder="Search video titles…"
               className="w-full bg-transparent text-sm md:text-base outline-none text-foreground placeholder:text-muted-foreground"
             />
           </div>

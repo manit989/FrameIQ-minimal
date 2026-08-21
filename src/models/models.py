@@ -29,11 +29,30 @@ class SearchResponse(BaseModel):
     count: int
     results: list[SearchResultItem]
 
+class VideoListItem(BaseModel):
+    video_id: str
+    video_filename: str
+    original_filename: str
+    title: str
+    thumbnail_url: str
+    scene_count: int
+    duration: str
+
+class VideoListResponse(BaseModel):
+    videos: list[VideoListItem]
+
+class TitleSearchResponse(BaseModel):
+    query: str
+    count: int
+    results: list[VideoListItem]
+
 class VideoAnalysisRequest(BaseModel):
     video_filename: str = Field(default="output.mp4")
 
 class VideoAnalysisResponse(BaseModel):
     video_filename: str
+    original_filename: str
+    title: str
     total_scenes: int
     scenes: list[SceneCaption]
 
@@ -41,6 +60,7 @@ class Items(BaseModel):
     vector: list[float]
     video_id: str
     video_filename: str  # Added to persist extension in LanceDB
+    original_filename: str = ""
     title: str
     start_time: float
     end_time: float

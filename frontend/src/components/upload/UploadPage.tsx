@@ -15,27 +15,46 @@ import {
   Brain,
   Film,
 } from "lucide-react"
-import { analyzeVideo, type VideoAnalysisResponse, type SceneCaption } from "../../lib/api"
+import {
+  analyzeVideo,
+  ApiError,
+  getApiErrorTitle,
+  normalizeApiError,
+  type VideoAnalysisResponse,
+  type SceneCaption,
+} from "../../lib/api"
 
 type UploadState = "idle" | "selected" | "uploading" | "analyzing" | "done" | "error"
 
-export function UploadPage() {
+interface UploadPageProps {
+  onUploadComplete: () => void | Promise<void>
+}
+
+export function UploadPage({ onUploadComplete }: UploadPageProps) {
   const [state, setState] = useState<UploadState>("idle")
   const [file, setFile] = useState<File | null>(null)
+  const [title, setTitle] = useState("")
   const [progress, setProgress] = useState(0)
   const [result, setResult] = useState<VideoAnalysisResponse | null>(null)
-  const [error, setError] = useState("")
+  const [error, setError] = useState<ApiError | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFile = useCallback((f: File) => {
-    if (!f.type.startsWith("video/")) {
-      setError("Please select a valid video file.")
+    const extension = f.name.split(".").pop()?.toLowerCase()
+    const supportedExtensions = ["mp4", "mov", "avi", "webm", "mkv", "m4v"]
+    if (!f.type.startsWith("video/") && !supportedExtensions.includes(extension ?? "")) {
+      setError(new ApiError({
+        code: "UNSUPPORTED_VIDEO_TYPE",
+        message: "Please select an MP4, MOV, AVI, WebM, MKV, or M4V video.",
+        status: 415,
+      }))
       setState("error")
       return
     }
     setFile(f)
-    setError("")
+    setTitle("")
+    setError(null)
     setState("selected")
   }, [])
 
@@ -50,35 +69,35 @@ export function UploadPage() {
   )
 
   const handleUpload = async () => {
-    if (!file) return
+    const normalizedTitle = title.trim()
+    if (!file || !normalizedTitle) return
+
+    setTitle(normalizedTitle)
+    setError(null)
     setState("uploading")
     setProgress(0)
 
     try {
-      const res = await analyzeVideo(file, (p) => {
+      const res = await analyzeVideo(file, normalizedTitle, (p) => {
         setProgress(p)
         if (p >= 100) setState("analyzing")
       })
       setResult(res)
       setState("done")
+      void onUploadComplete()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed")
-      setState("error")
+      setError(normalizeApiError(err, "Upload failed"))
+      setState("selected")
     }
   }
 
   const handleReset = () => {
     setState("idle")
     setFile(null)
+    setTitle("")
     setProgress(0)
     setResult(null)
-    setError("")
-  }
-
-  const formatTime = (s: number) => {
-    const min = Math.floor(s / 60)
-    const sec = Math.floor(s % 60)
-    return `${min}:${sec.toString().padStart(2, "0")}`
+    setError(null)
   }
 
   const formatSize = (bytes: number) => {
@@ -146,7 +165,7 @@ export function UploadPage() {
           {error && (
             <div className="mt-4 flex items-center justify-center gap-2 text-sm text-destructive">
               <AlertCircle className="h-4 w-4" />
-              {error}
+              {error.message}
             </div>
           )}
         </div>
@@ -154,7 +173,13 @@ export function UploadPage() {
 
       {/* Selected File Preview */}
       {state === "selected" && file && (
-        <div className="rounded-2xl border border-border/60 bg-card p-6 animate-fade-in-up">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            void handleUpload()
+          }}
+          className="rounded-2xl border border-border/60 bg-card p-6 animate-fade-in-up"
+        >
           <div className="flex items-center gap-4">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
               <FileVideo className="h-6 w-6" />
@@ -166,21 +191,48 @@ export function UploadPage() {
               </p>
             </div>
             <button
+              type="button"
               onClick={handleReset}
+              aria-label="Remove selected video"
               className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
             >
               <X className="h-4 w-4" />
             </button>
           </div>
 
+          <div className="mt-5">
+            <label htmlFor="video-title" className="block text-sm font-medium text-foreground mb-2">
+              Video title
+            </label>
+            <input
+              id="video-title"
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Enter a title for your video"
+              maxLength={200}
+              required
+              autoFocus
+              className="w-full rounded-xl border border-border bg-input px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground transition-colors focus:border-primary"
+            />
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              This title will be shown in your library and search results.
+            </p>
+          </div>
+
+          {error && (
+            <ApiErrorNotice error={error} />
+          )}
+
           <button
-            onClick={handleUpload}
-            className="mt-5 w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-primary text-primary-foreground font-medium text-sm hover:opacity-90 transition-opacity"
+            type="submit"
+            disabled={!title.trim()}
+            className="mt-5 w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-primary text-primary-foreground font-medium text-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 transition-opacity"
           >
             <Sparkles className="h-4 w-4" />
-            Analyze with AI
+            {error?.retryable ? "Try analysis again" : "Analyze with AI"}
           </button>
-        </div>
+        </form>
       )}
 
       {/* Upload Progress / Analyzing */}
@@ -241,7 +293,7 @@ export function UploadPage() {
                 Analysis complete — {result.total_scenes} scene{result.total_scenes !== 1 && "s"} detected
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {result.video_filename} • Your video is now searchable via AI
+                {result.title} • {result.original_filename} • Your video is now searchable via AI
               </p>
             </div>
             <button
@@ -261,6 +313,28 @@ export function UploadPage() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function ApiErrorNotice({ error }: { error: ApiError }) {
+  return (
+    <div role="alert" className="mt-5 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+      <div className="flex items-start gap-3">
+        <AlertCircle className="h-5 w-5 shrink-0 text-destructive mt-0.5" />
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-foreground">{getApiErrorTitle(error)}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{error.message}</p>
+          <p className="mt-2 text-[11px] font-mono text-muted-foreground/70">
+            {error.code}{error.requestId ? ` • Request ${error.requestId}` : ""}
+          </p>
+          {error.retryable && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              This error may be temporary. You can retry without selecting the file again.
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

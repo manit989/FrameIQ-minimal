@@ -1,16 +1,17 @@
 import { useState, useRef, useCallback, useEffect } from "react"
-import { Clock, Film, Sparkles, Search as SearchIcon, Play, Volume2, VolumeX } from "lucide-react"
-import type { SearchResultItem } from "../../lib/api"
+import { Clock, Film, Sparkles, Search as SearchIcon, Play, RefreshCw, Volume2, VolumeX } from "lucide-react"
+import { getApiErrorTitle, type ApiError, type SearchResultItem } from "../../lib/api"
 import { ShortsPlayer } from "./ShortsPlayer"
 
 interface SearchResultsProps {
   query: string
   results: SearchResultItem[]
   isLoading: boolean
-  error: string | null
+  error: ApiError | null
+  onRetry: () => void
 }
 
-export function SearchResults({ query, results, isLoading, error }: SearchResultsProps) {
+export function SearchResults({ query, results, isLoading, error, onRetry }: SearchResultsProps) {
   const [playerIndex, setPlayerIndex] = useState<number | null>(null)
 
   // Empty state — no search yet
@@ -58,8 +59,20 @@ export function SearchResults({ query, results, isLoading, error }: SearchResult
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-destructive/10 mb-4">
           <SearchIcon className="h-6 w-6 text-destructive" />
         </div>
-        <h2 className="text-base font-semibold text-foreground">Search failed</h2>
-        <p className="text-sm text-muted-foreground mt-1 max-w-md">{error}</p>
+        <h2 className="text-base font-semibold text-foreground">{getApiErrorTitle(error)}</h2>
+        <p className="text-sm text-muted-foreground mt-1 max-w-md">{error.message}</p>
+        <p className="mt-2 text-[11px] font-mono text-muted-foreground/70">
+          {error.code}{error.requestId ? ` • Request ${error.requestId}` : ""}
+        </p>
+        {error.retryable && (
+          <button
+            onClick={onRetry}
+            className="mt-4 inline-flex items-center gap-2 rounded-lg bg-muted px-4 py-2 text-sm font-medium hover:bg-accent transition-colors"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Retry search
+          </button>
+        )}
       </div>
     )
   }
@@ -120,7 +133,6 @@ interface SearchResultCardProps {
 }
 
 function SearchResultCard({ item, index, onOpen }: SearchResultCardProps) {
-  const [isHovering, setIsHovering] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isMuted, setIsMuted] = useState(true)
   const [videoReady, setVideoReady] = useState(false)
@@ -174,14 +186,12 @@ function SearchResultCard({ item, index, onOpen }: SearchResultCardProps) {
   }, [])
 
   const handleMouseEnter = () => {
-    setIsHovering(true)
     hoverTimerRef.current = setTimeout(() => {
       startPlayback()
     }, 400)
   }
 
   const handleMouseLeave = () => {
-    setIsHovering(false)
     if (hoverTimerRef.current) {
       clearTimeout(hoverTimerRef.current)
       hoverTimerRef.current = null
