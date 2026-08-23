@@ -80,12 +80,26 @@ export function VideoCard({ video, index = 0 }: VideoCardProps) {
         transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-black/40
       `}
     >
+      {/* Gradient fallback behind the image */}
+      <div className="absolute inset-0 -z-[2] bg-gradient-to-br from-zinc-800/60 via-zinc-900/40 to-zinc-950/80">
+        <div className="absolute inset-0 flex items-center justify-center">
+          <Film className="h-10 w-10 text-white/20" />
+        </div>
+      </div>
+
+      {/* Blurred background image */}
+      <img
+        src={video.thumbnail_url}
+        alt=""
+        className="absolute inset-0 h-full w-full object-cover blur-xl scale-110 opacity-50 -z-[1]"
+      />
+
       {/* Thumbnail Image — hidden when video is playing and ready */}
       <img
         src={video.thumbnail_url}
         alt={video.title}
         className={`
-          absolute inset-0 h-full w-full object-cover transition-opacity duration-300
+          absolute inset-0 h-full w-full object-contain transition-opacity duration-300 z-0
           ${isPlaying && videoReady ? "opacity-0" : "opacity-100"}
         `}
         loading="lazy"
@@ -104,17 +118,10 @@ export function VideoCard({ video, index = 0 }: VideoCardProps) {
         preload="none"
         onCanPlay={handleVideoCanPlay}
         className={`
-          absolute inset-0 h-full w-full object-cover transition-opacity duration-300
+          absolute inset-0 h-full w-full object-contain transition-opacity duration-300 z-0
           ${isPlaying && videoReady ? "opacity-100" : "opacity-0"}
         `}
       />
-
-      {/* Gradient fallback behind the image */}
-      <div className="absolute inset-0 -z-[1] bg-gradient-to-br from-zinc-800/60 via-zinc-900/40 to-zinc-950/80">
-        <div className="absolute inset-0 flex items-center justify-center">
-          <Film className="h-10 w-10 text-white/20" />
-        </div>
-      </div>
 
       {/* Play icon on hover — hidden when actually playing */}
       {!isPlaying && (

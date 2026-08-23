@@ -358,18 +358,24 @@ export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) 
             className="h-full w-full relative"
             style={{ willChange: "transform, opacity" }}
           >
+            {/* Blurred background image (from thumbnail) */}
+            <img
+              src={item.thumbnail_url}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover blur-xl scale-110 opacity-50 -z-[2]"
+            />
             {/* Thumbnail poster — visible while video loads */}
             <img
               src={item.thumbnail_url}
               alt=""
-              className="absolute inset-0 h-full w-full object-cover -z-[1]"
+              className={`absolute inset-0 h-full w-full object-contain -z-[1] transition-opacity duration-300 ${isPlaying ? 'opacity-0' : 'opacity-100'}`}
             />
 
             <video
               ref={videoRef}
               muted={isMuted}
               playsInline
-              className="h-full w-full object-cover"
+              className="h-full w-full object-contain"
             />
 
             {/* Tap to play/pause */}
