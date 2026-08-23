@@ -163,7 +163,7 @@ def get_videos(
         raise SearchValidationError()
 
     query_vector = get_embedding(normalized_query)
-    raw_results = search_items(query_vector, limit)
+    raw_results = search_items(normalized_query, query_vector, limit)
 
     try:
         results = []

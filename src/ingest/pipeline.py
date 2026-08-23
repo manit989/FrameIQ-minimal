@@ -72,9 +72,9 @@ def get_video_metadata_items() -> list[dict]:
     except Exception as exc:
         raise database_error("read", exc) from exc
 
-def search_items(query_vector: list[float], limit: int) -> list[dict]:
+def search_items(query_text: str, query_vector: list[float], limit: int) -> list[dict]:
     try:
-        return get_or_create_table().search(query_vector).limit(limit).to_list()
+        return get_or_create_table().search(query_type="hybrid").vector(query_vector).text(query_text).limit(limit).to_list()
     except AppError:
         raise
     except Exception as exc:
@@ -86,6 +86,10 @@ def insert_to_lancedb(items: list[Items]):
     try:
         table = get_or_create_table()
         table.add([item.model_dump() for item in items])
+        try:
+            table.create_fts_index("text", replace=True)
+        except Exception as idx_exc:
+            logger.warning("Failed to create FTS index: %r", idx_exc)
     except AppError:
         raise
     except Exception as exc:
