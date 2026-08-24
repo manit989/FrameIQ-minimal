@@ -6,6 +6,7 @@ import { VideoCard, VideoCardSkeleton } from "./components/video/VideoCard"
 import { UploadPage } from "./components/upload/UploadPage"
 import { SearchResults } from "./components/search/SearchResults"
 import { TitleSearchResults } from "./components/search/TitleSearchResults"
+import { ShortsPlayer } from "./components/search/ShortsPlayer"
 import {
   searchVideos,
   searchVideosByTitle,
@@ -30,6 +31,7 @@ export default function App() {
   const [homeVideos, setHomeVideos] = useState<VideoItem[]>([])
   const [homeLoading, setHomeLoading] = useState(true)
   const [homeError, setHomeError] = useState<ApiError | null>(null)
+  const [homePlayingIndex, setHomePlayingIndex] = useState<number | null>(null)
 
   // Search state — lifted here so NavSearch and main content can share it
   const [searchQuery, setSearchQuery] = useState("")
@@ -98,6 +100,7 @@ export default function App() {
 
   const handleNavigate = useCallback((page: Page) => {
     setCurrentPage(page)
+    setHomePlayingIndex(null)
     // Refresh home feed when navigating back (picks up newly analyzed videos)
     if (page === "home") {
       loadHomeVideos()
@@ -112,6 +115,24 @@ export default function App() {
       setSearchLoading(false)
     }
   }, [loadHomeVideos])
+
+  // Safely map home videos into SearchResultItem structure for ShortsPlayer
+  const homePlayerItems: SearchResultItem[] = homeVideos.map((video: any) => {
+    const videoId = video.video_id || video.id || ""
+    const filename = video.video_filename || video.filename || (videoId ? `${videoId}.mp4` : "")
+
+    return {
+      ...video,
+      video_id: videoId,
+      video_filename: filename,
+      title: video.title || "Untitled Video",
+      thumbnail_url: video.thumbnail_url || video.thumbnail || "",
+      start_time: Number(video.start_time) || 0,
+      end_time: Number(video.end_time) || Number(video.duration) || 0,
+      similarity_score: typeof video.similarity_score === "number" ? video.similarity_score : 1,
+      text: video.text || video.description || video.title || "",
+    } as SearchResultItem
+  })
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col antialiased">
@@ -180,11 +201,20 @@ export default function App() {
               {!homeLoading && homeVideos.length > 0 && (
                 <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4 mt-4">
                   {homeVideos.map((video, index) => (
-                    <VideoCard
-                      key={video.video_id}
-                      video={video}
-                      index={index}
-                    />
+                    <div
+                      key={video.video_id || (video as any).id || index}
+                      onClickCapture={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setHomePlayingIndex(index)
+                      }}
+                      className="cursor-pointer"
+                    >
+                      <VideoCard
+                        video={video}
+                        index={index}
+                      />
+                    </div>
                   ))}
                 </div>
               )}
@@ -209,6 +239,14 @@ export default function App() {
                     Upload Video
                   </button>
                 </div>
+              )}
+
+              {homePlayingIndex !== null && (
+                <ShortsPlayer
+                  items={homePlayerItems}
+                  startIndex={homePlayingIndex}
+                  onClose={() => setHomePlayingIndex(null)}
+                />
               )}
             </div>
           )}
