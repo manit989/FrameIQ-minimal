@@ -151,7 +151,7 @@ function SearchResultCard({ item, index, onOpen }: SearchResultCardProps) {
     return `${min}:${sec.toString().padStart(2, "0")}`
   }
 
-  const similarityPercent = Math.round(item.similarity_score * 100)
+
 
   // Start playback from start_time, let it play until video ends naturally
   const startPlayback = useCallback(() => {
@@ -300,10 +300,7 @@ function SearchResultCard({ item, index, onOpen }: SearchResultCardProps) {
           {formatTime(item.start_time)} — {videoDuration ? formatTime(videoDuration) : formatTime(item.end_time)}
         </div>
 
-        {/* Similarity score — bottom right, subtle */}
-        <div className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded-md bg-white/10 backdrop-blur-sm text-[10px] font-medium text-white/80">
-          {similarityPercent}%
-        </div>
+
 
         {/* Playing indicator bar */}
         {isPlaying && (

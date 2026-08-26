@@ -66,7 +66,7 @@ def get_all_items() -> list[dict]:
 
 def get_video_metadata_items() -> list[dict]:
     try:
-        return get_or_create_table().search().select(VIDEO_METADATA_COLUMNS).to_list()
+        return get_or_create_table().search().select(VIDEO_METADATA_COLUMNS).where("video_id != 'init'").to_list()
     except AppError:
         raise
     except Exception as exc:
@@ -74,7 +74,7 @@ def get_video_metadata_items() -> list[dict]:
 
 def search_items(query_text: str, query_vector: list[float], limit: int) -> list[dict]:
     try:
-        return get_or_create_table().search(query_type="hybrid").vector(query_vector).text(query_text).limit(limit).to_list()
+        return get_or_create_table().search(query_type="hybrid").vector(query_vector).text(query_text).where("video_id != 'init'").limit(limit).to_list()
     except AppError:
         raise
     except Exception as exc:

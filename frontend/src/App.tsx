@@ -40,6 +40,7 @@ export default function App() {
   const [titleSearchResults, setTitleSearchResults] = useState<VideoItem[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
   const [searchError, setSearchError] = useState<ApiError | null>(null)
+  const [searchKey, setSearchKey] = useState(0)
   const searchRequestId = useRef(0)
 
   // Fetch analyzed videos on mount and when navigating home

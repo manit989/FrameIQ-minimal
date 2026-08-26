@@ -166,11 +166,23 @@ def get_videos(
     raw_results = search_items(normalized_query, query_vector, limit)
 
     try:
+        # Collect all distances for min-max normalization.
+        # Hybrid search (RRF) returns _distance values that can exceed 1.0,
+        # so we normalise across the result set to get meaningful [0, 1] scores.
+        distances = [row.get("_distance", 0.0) for row in raw_results]
+        min_dist = min(distances) if distances else 0.0
+        max_dist = max(distances) if distances else 0.0
+        dist_range = max_dist - min_dist
+
         results = []
         for row in raw_results:
             start_sec = int(round(row.get("start_time", 0.0)))
-            raw_dist = row.get("_distance", 1.0)
-            similarity_score = max(0.0, min(1.0, 1.0 - raw_dist))
+            raw_dist = row.get("_distance", 0.0)
+
+            if dist_range > 0:
+                similarity_score = 1.0 - (raw_dist - min_dist) / dist_range
+            else:
+                similarity_score = 1.0  # all results equidistant
 
             results.append(
                 SearchResultItem(

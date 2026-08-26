@@ -8,7 +8,7 @@ import {
   Share2,
   MessageCircle,
   Clock,
-  Sparkles,
+
   ChevronUp,
   ChevronDown,
   ExternalLink,
@@ -46,7 +46,7 @@ export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) 
   }, [currentIndex])
 
   const item = items[currentIndex]
-  const similarityPercent = Math.round(item.similarity_score * 100)
+
   const fullVideoFilename = item.video_filename || `${item.video_id}.mp4`
   const fullVideoUrl = `/videos/${encodeURIComponent(fullVideoFilename)}`
 
@@ -336,10 +336,7 @@ export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) 
                 <Clock className="h-3 w-3" />
                 {formatTime(item.start_time)} — {videoDuration ? formatTime(videoDuration) : formatTime(item.end_time)}
               </span>
-              <span className="flex items-center gap-1">
-                <Sparkles className="h-3 w-3" />
-                {similarityPercent}% match
-              </span>
+
             </div>
           </div>
         </div>
@@ -423,9 +420,7 @@ export function ShortsPlayer({ items, startIndex, onClose }: ShortsPlayerProps) 
                   <Clock className="h-3 w-3" />
                   {formatTime(item.start_time)} — {videoDuration ? formatTime(videoDuration) : formatTime(item.end_time)}
                 </span>
-                <span className="flex items-center gap-1 bg-white/10 px-1.5 py-0.5 rounded">
-                  {similarityPercent}% match
-                </span>
+
               </div>
               <a
                 href={fullVideoUrl}
